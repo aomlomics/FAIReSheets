@@ -1,0 +1,13 @@
+# Ignore .env file
+.env 
+
+# Ignore API Token files
+token.json
+fairesheets-*.json
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
