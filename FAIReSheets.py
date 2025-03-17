@@ -428,6 +428,9 @@ def create_project_metadata_sheet(worksheet, full_temp_file_name, input_df, req_
     # Read the projectMetadata sheet from the template
     project_meta_df = pd.read_excel(full_temp_file_name, sheet_name="projectMetadata")
     
+    # Replace NaN values with empty strings immediately after loading
+    project_meta_df = project_meta_df.fillna('')
+    
     # Filter rows based on assay_type
     section2rm = []
     if assay_type == 'metabarcoding':
@@ -458,22 +461,41 @@ def create_project_metadata_sheet(worksheet, full_temp_file_name, input_df, req_
         project_meta_df = pd.concat([project_meta_df, user_df], ignore_index=True)
     
     # Convert columns to string type to avoid dtype warnings
-    project_meta_df['project_level'] = project_meta_df['project_level'].astype(str)
+    for col in project_meta_df.columns:
+        project_meta_df[col] = project_meta_df[col].astype(str)
+    
+    # Replace 'nan' strings with empty strings
+    project_meta_df = project_meta_df.replace('nan', '')
+    
+    # Get the input file name for the checklist version
+    input_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}.xlsx'
+    
+    # Pre-fill values from config.yaml
     project_meta_df.loc[project_meta_df['term_name'] == 'project_id', 'project_level'] = project_id
-
-    # For assay columns
-    for i, name in enumerate(assay_name):
-        col_name = f"assay{i+1}"
-        if col_name in project_meta_df.columns:
-            project_meta_df[col_name] = project_meta_df[col_name].astype(str)
+    project_meta_df.loc[project_meta_df['term_name'] == 'assay_type', 'project_level'] = assay_type
+    project_meta_df.loc[project_meta_df['term_name'] == 'checkls_ver', 'project_level'] = input_file_name
+    
+    # Handle assay_name based on number of assays
+    if len(assay_name) == 1:
+        # Single assay - just put it in project_level
+        project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', 'project_level'] = assay_name[0]
+    else:
+        # Multiple assays - put pipe-separated list in project_level
+        project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', 'project_level'] = ' | '.join(assay_name)
+        
+        # Also create individual columns for each assay
+        for i, name in enumerate(assay_name):
+            col_name = f"assay{i+1}"
+            if col_name not in project_meta_df.columns:
+                project_meta_df[col_name] = ""
             project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', col_name] = name
     
-    # Replace NaN values with empty strings to avoid JSON errors
-    project_meta_df_clean = project_meta_df.fillna('')
-
+    # Final check to ensure no 'nan' values remain
+    project_meta_df = project_meta_df.replace('nan', '')
+    
     # Convert DataFrame to list of lists for gspread
-    data = [project_meta_df_clean.columns.tolist()] + project_meta_df_clean.values.tolist()
-
+    data = [project_meta_df.columns.tolist()] + project_meta_df.values.tolist()
+    
     # Resize worksheet to accommodate all data (add some buffer)
     rows_needed = len(data) + 10  # Add buffer
     cols_needed = len(data[0]) + 5  # Add buffer
