@@ -148,8 +148,8 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         )
     
     # Create or clear sheets
-    # First create a list of all sheets we'll need
-    sheet_names = ["README", "projectMetadata", "sampleMetadata", "Drop-down values"]
+    # First create a list of all sheets we'll need (excluding README which will use Sheet1)
+    sheet_names = ["projectMetadata", "sampleMetadata", "Drop-down values"]
     
     # Add assay-type specific sheets
     if assay_type == 'metabarcoding':
@@ -171,6 +171,16 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     for sheet_name in sheet_names:
         # Create with more rows and columns by default
         worksheets[sheet_name] = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
+    
+    # Use Sheet1 as README sheet
+    try:
+        readme_sheet = spreadsheet.worksheet("Sheet1")
+        # Rename Sheet1 to README
+        readme_sheet.update_title("README")
+        worksheets["README"] = readme_sheet
+    except gspread.exceptions.WorksheetNotFound:
+        # If Sheet1 doesn't exist for some reason, create README sheet
+        worksheets["README"] = spreadsheet.add_worksheet(title="README", rows=200, cols=100)
     
     # Create README sheet
     create_readme_sheet(
@@ -248,6 +258,9 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
             color_styles=color_styles,
             vocab_df=vocab_df
         )
+        
+    # Wait a moment to ensure all operations are complete
+    time.sleep(1)
 
 def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_type,
                         project_id, assay_name, projectMetadata_user, sampleMetadata_user, color_styles, FAIRe_checklist_ver):
