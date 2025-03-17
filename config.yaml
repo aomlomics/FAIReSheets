@@ -1,0 +1,26 @@
+req_lev:
+  - M
+  - HR
+  - R
+  - O
+sample_type:
+  - Water
+  - Sediment
+assay_type: metabarcoding
+project_id: noaa-aoml-myproject
+assay_name:
+  - ssu16sv4v5-parada
+  - ssu18sv4-stoeck
+  - ssu18sv9-amaralzettler
+  - ssu12sv5v6-mifish-mod
+  - coi-leray-folmer
+  - lsu16sv4-kelly
+projectMetadata_user:
+  - my_project_field1
+  - my_project_field2
+sampleMetadata_user:
+  - my_sample_field1
+  - my_sample_field2
+experimentRunMetadata_user:
+  - my_experimentRun_field1
+  - my_experimentRun_field2

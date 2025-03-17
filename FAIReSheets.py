@@ -111,6 +111,9 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     # Open the spreadsheet
     spreadsheet = client.open_by_key(spreadsheet_id)
     
+    # Update the spreadsheet title to include the project_id
+    spreadsheet.update_title(f"FAIRe_{project_id}")
+    
     # Set input files
     FAIRe_checklist_ver = 'v1.0'
     input_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}.xlsx'
@@ -245,8 +248,6 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
             color_styles=color_styles,
             vocab_df=vocab_df
         )
-    
-    print(f"Your templates have been created in Google Sheets: {spreadsheet.url}")
 
 def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_type,
                         project_id, assay_name, projectMetadata_user, sampleMetadata_user, color_styles, FAIRe_checklist_ver):
@@ -258,16 +259,33 @@ def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_
     if len(iso_current_time) >= 2:
         iso_current_time = re.sub(r"(\d{2})(\d{2})$", r"\1:\2", iso_current_time)
 
-    # Build README content sections exactly like in R script
+    # Build README content sections with new format (values below labels)
     readme1 = [
-        ['The templates were generated using the eDNA checklist version of;', input_file_name],
-        ['', ''],
-        ['Date/Time generated;', iso_current_time],
-        ['', '']
+        ['FAIRe Checklist Version:'],
+        [input_file_name],
+        [''],
+        ['Date/Time generated:'],
+        [iso_current_time],
+        ['']
     ]
     
+    # Add Modification Timestamp section
+    readme_timestamp_header = [
+        ['Modification Timestamp:'],
+        ['Sheet Name', 'Timestamp', 'Email']
+    ]
+    
+    # Get all worksheet names except README and Drop-down values
+    sheet_names = [ws.title for ws in worksheet.spreadsheet.worksheets() 
+                  if ws.title not in ["README", "Drop-down values"]]
+    
+    # Create rows for each sheet (empty timestamp and email cells)
+    readme_timestamp_rows = [[name, '', ''] for name in sheet_names]
+    
+    # Template parameters section
     readme2 = [
-        ['The templates were generated based on the below arguments;'],
+        [''],
+        ['Template parameters:'],
         [f'project_id = {project_id}'],
         [f'assay_name = {" | ".join(assay_name)}'],
         [f'assay_type = {assay_type}'],
@@ -291,19 +309,21 @@ def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_
     if sampleMetadata_user:
         readme2.append([f'sampleMetadata_user = {" | ".join(sampleMetadata_user)}'])
     
-    readme2.append(['', ''])
+    readme2.append([''])
     
+    # Requirement levels section
     readme3 = [
-        ['Requirement levels;'],
+        ['Requirement levels:'],
         ['M = Mandatory'],
         ['HR = Highly recommended'],
         ['R = Recommended'],
         ['O = Optional'],
-        ['', '']
+        ['']
     ]
     
+    # Sheets in this Google sheet section (renamed from List of files)
     readme4 = [
-        ['List of files;'],
+        ['Sheets in this Google sheet:'],
         [f'projectMetadata_{project_id}'],
         [f'sampleMetadata_{project_id}']
     ]
@@ -327,22 +347,46 @@ def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_
         ])
     
     # Combine all readme sections
-    readme_data = readme1 + readme2 + readme3 + readme4
+    readme_data = readme1 + readme_timestamp_header + readme_timestamp_rows + readme2 + readme3 + readme4
     
     # Write data to sheet - all at once to reduce API calls
     worksheet.update('A1', readme_data)
     
-    # Format header rows (bold) using format_cell_ranges which works better
+    # Format header rows (bold) using format_cell_ranges
     header_format = gsf.CellFormat(textFormat=gsf.TextFormat(bold=True))
     
-    # Create a list of (range, format) tuples
+    # Calculate row positions
+    timestamp_section_start = 7
+    timestamp_section_end = 8 + len(sheet_names)
+    template_params_start = timestamp_section_end + 2
+    req_levels_start = template_params_start + len(readme2) - 1
+    sheets_section_start = req_levels_start + len(readme3)
+    
+    # Create a list of (range, format) tuples for section headers
     format_ranges = [
-        ('A1:A1', header_format),
-        ('A5:A5', header_format)
+        ('A1:A1', header_format),  # FAIRe Checklist Version
+        ('A4:A4', header_format),  # Date/Time generated
+        ('A7:A7', header_format),  # Modification Timestamp
+        ('A8:C8', header_format),  # Timestamp table headers
+        (f'A{template_params_start}:A{template_params_start}', header_format),  # Template parameters
+        (f'A{req_levels_start}:A{req_levels_start}', header_format),  # Requirement levels
+        (f'A{sheets_section_start}:A{sheets_section_start}', header_format)   # Sheets in this Google sheet
     ]
     
     # Apply all formatting at once
     gsf.format_cell_ranges(worksheet, format_ranges)
+    
+    # Apply color formatting to requirement levels - separate call to ensure correct formatting
+    req_level_rows = {
+        'M': req_levels_start + 1,
+        'HR': req_levels_start + 2,
+        'R': req_levels_start + 3,
+        'O': req_levels_start + 4
+    }
+    
+    for level, row in req_level_rows.items():
+        if level in color_styles:
+            gsf.format_cell_range(worksheet, f'A{row}:A{row}', color_styles[level])
 
 def create_dropdown_sheet(worksheet, vocab_df, assay_type, assay_name):
     """Create the Drop-down values sheet with controlled vocabulary options."""
