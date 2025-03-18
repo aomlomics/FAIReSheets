@@ -27,7 +27,6 @@ import re
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from openpyxl import load_workbook
 import gspread
 import gspread_formatting as gsf
 from google.oauth2.service_account import Credentials

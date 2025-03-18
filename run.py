@@ -10,7 +10,7 @@ spreadsheet_id = "1Tfnhkm2IC8LSheYPFmt8JzUiBm7talV5nebSdMrhVXM"
 
 # Set environment variables directly in the script
 os.environ["SPREADSHEET_ID"] = spreadsheet_id
-os.environ["SERVICE_ACCOUNT_FILE"] = os.path.join(current_dir, "fairesheets-609bb159302b.json")
+os.environ["SERVICE_ACCOUNT_FILE"] = os.path.join(current_dir, "fairesheets-a6c04146b468.json")
 
 print(f"Using credentials file: {os.environ['SERVICE_ACCOUNT_FILE']}")
 print(f"Using spreadsheet ID: {spreadsheet_id}")
