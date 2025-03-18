@@ -30,7 +30,7 @@ A Google Drive admin account in your organization must grant permission for the 
 #### Create Key
 1. Under the service account you created, click "Add Key" and select "JSON".
 2. This will download a JSON file with the credentials to your computer. **DO NOT SHARE THIS PUBLICLY**.
-3. Copy or Move this JSON file into the FAIReSheets project directory. 
+3. Copy or Move this JSON file into the FAIReSheets root project directory. 
 
 #### Grant Access to Service Account
 1. The service account has an email address (e.g., `service-account-name@data-templates.iam.gserviceaccount.com`).
@@ -62,7 +62,7 @@ pip install pandas
 #### Credentials
 As previously mentioned, just Copy or Move your JSON credentials file into the root directory of this repository. 
 
-Then, include the Spreadsheet ID in your .env file, or paste directly into the `run.py` script.
+Then, include the Spreadsheet ID in your `.env` file, or paste directly into the `run.py` script.
 
 
 

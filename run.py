@@ -15,8 +15,8 @@ os.environ["SERVICE_ACCOUNT_FILE"] = os.path.join(current_dir, "fairesheets-a6c0
 print(f"Using credentials file: {os.environ['SERVICE_ACCOUNT_FILE']}")
 print(f"Using spreadsheet ID: {spreadsheet_id}")
 
-# Import the function directly from the file in the same directory
-from FAIReSheets import FAIReSheets
+# Import the function directly from the file in the src directory
+from src.FAIReSheets import FAIReSheets
 
 if __name__ == "__main__":
     try:
@@ -32,31 +32,35 @@ if __name__ == "__main__":
             
         print(f"Loaded configuration from {config_path}")
         
-        # Check if the Excel files exist
+        # Define input directory and Excel file paths
+        input_dir = os.path.join(current_dir, "input")
         FAIRe_checklist_ver = 'v1.0'
         input_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}.xlsx'
         full_temp_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}_FULLtemplate.xlsx'
         
-        print(f"Checking for input files in: {current_dir}")
+        input_file_path = os.path.join(input_dir, input_file_name)
+        full_temp_file_path = os.path.join(input_dir, full_temp_file_name)
+        
+        print(f"Checking for input files in: {input_dir}")
         print(f"Looking for: {input_file_name} and {full_temp_file_name}")
         
-        if not os.path.exists(input_file_name):
-            print(f"ERROR: Could not find {input_file_name}")
+        if not os.path.exists(input_file_path):
+            print(f"ERROR: Could not find {input_file_path}")
             sys.exit(1)
         else:
-            print(f"Found {input_file_name}")
+            print(f"Found {input_file_path}")
             
-        if not os.path.exists(full_temp_file_name):
-            print(f"ERROR: Could not find {full_temp_file_name}")
+        if not os.path.exists(full_temp_file_path):
+            print(f"ERROR: Could not find {full_temp_file_path}")
             sys.exit(1)
         else:
-            print(f"Found {full_temp_file_name}")
+            print(f"Found {full_temp_file_path}")
             
             # Try to load the template with pandas
             try:
                 print("Testing Excel file reading...")
                 import pandas as pd
-                sheets = pd.ExcelFile(full_temp_file_name).sheet_names
+                sheets = pd.ExcelFile(full_temp_file_path).sheet_names
                 print(f"Excel file contains sheets: {sheets}")
                 print("Excel file appears to be valid")
             except Exception as e:
@@ -72,7 +76,8 @@ if __name__ == "__main__":
             project_id=config.get('project_id', 'default_project'),
             assay_name=config.get('assay_name', ['default_assay']),
             projectMetadata_user=config.get('projectMetadata_user', None),
-            sampleMetadata_user=config.get('sampleMetadata_user', None)
+            sampleMetadata_user=config.get('sampleMetadata_user', None),
+            input_dir=input_dir  # Pass the input directory to the function
         )
         
         print("\nFAIReSheets completed successfully!")
