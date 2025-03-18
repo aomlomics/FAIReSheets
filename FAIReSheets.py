@@ -308,7 +308,7 @@ def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_
     if any(s.lower() == 'other' for s in sample_type):
         readme2.append(
             [f'sample_type = {" | ".join(sample_type)} '
-             '(Note: this option provides sample-type-specific fields for ALL sample types)']
+             '(Note: this option provides sample-type-specific fields for the selected sample type(s))']
         )
     else:
         readme2.append(
@@ -677,133 +677,281 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
                                assay_type, assay_name, sampleMetadata_user, color_styles, vocab_df):
     """Create and format the sampleMetadata sheet."""
     
-    # Use pandas DataFrame directly
-    sheet_df = full_template_df["sampleMetadata"]
-    # Replace NaN values with empty strings to avoid JSON errors
+    # Read the template sheet
+    sheet_df = pd.read_excel(full_temp_file_name, sheet_name="sampleMetadata", header=None)
     sheet_df = sheet_df.fillna('')
-    data = sheet_df.values.tolist()
     
-    # Find the term_name row
-    term_name_row_idx = None
-    for i, row in enumerate(data):
-        if row and 'samp_name' in row:
-            term_name_row_idx = i
-            break
+    # Find key rows
+    term_name_row = sheet_df[sheet_df.iloc[:, 0] == 'samp_name'].index[0]
+    section_row = sheet_df[sheet_df.iloc[:, 0] == '# section'].index[0]
+    req_level_row = sheet_df[sheet_df.iloc[:, 0] == '# requirement_level_code'].index[0]
     
-    if term_name_row_idx is None:
-        raise ValueError("Could not find samp_name in sampleMetadata template")
+    # Convert NumPy integers to Python integers to avoid JSON serialization issues
+    term_name_row = int(term_name_row)
+    section_row = int(section_row)
+    req_level_row = int(req_level_row)
     
-    # Get the column headers (term names)
-    headers = data[term_name_row_idx]
+    # Temporarily set column names for easier filtering
+    temp_col_names = sheet_df.iloc[term_name_row].tolist()
+    sheet_df.columns = [str(col) if pd.notna(col) and col != '' else f"col_{i}" 
+                        for i, col in enumerate(temp_col_names)]
     
-    # Filter columns based on sample_type
+    # Filter by sample type if not 'other'
     if not any(s.lower() == 'other' for s in sample_type):
-        # Find sample_type specific columns to keep
-        cols_to_keep = []
-        for i, col in enumerate(headers):
-            if col:
-                # Find this column in the input dataframe
-                col_info = input_df[input_df['term_name'] == col]
-                if not col_info.empty:
-                    sample_type_spec = col_info.iloc[0]['sample_type_specificity']
-                    if pd.isna(sample_type_spec) or sample_type_spec == 'ALL' or any(s in str(sample_type_spec).split(',') for s in sample_type):
-                        cols_to_keep.append(i)
-                else:
-                    # Keep columns not in the input dataframe (like user-defined)
-                    cols_to_keep.append(i)
+        filtered_terms = input_df[
+            input_df['sample_type_specificity'].isna() | 
+            (input_df['sample_type_specificity'] == 'ALL') |
+            input_df['sample_type_specificity'].str.contains('|'.join(sample_type), case=False, na=False)
+        ]['term_name'].tolist()
         
-        # Create a filtered data list with only the columns to keep
-        filtered_data = []
-        for row in data:
-            filtered_row = [row[i] for i in cols_to_keep]
-            filtered_data.append(filtered_row)
-        data = filtered_data
-    
-    # Find requirement level row
-    req_level_row_idx = None
-    for i, row in enumerate(data):
-        if row and '# requirement_level_code' in row:
-            req_level_row_idx = i
-            break
-    
-    # Filter by requirement level
-    if req_level_row_idx is not None:
-        req_levels = data[req_level_row_idx]
-        cols_to_keep = []
-        for i, level in enumerate(req_levels):
-            if level in req_lev or not level:
-                cols_to_keep.append(i)
+        # Make sure to keep the first column (with samp_name)
+        cols_to_keep = ['col_0'] if 'col_0' in sheet_df.columns else []
         
-        # Create a filtered data list with only the columns to keep
-        filtered_data = []
-        for row in data:
-            filtered_row = [row[i] for i in cols_to_keep]
-            filtered_data.append(filtered_row)
-        data = filtered_data
+        # Add other columns that match filtered terms or are empty/unnamed
+        cols_to_keep.extend([col for col in sheet_df.columns 
+                           if col in filtered_terms or (col.startswith('col_') and col != 'col_0')])
+        
+        sheet_df = sheet_df[cols_to_keep]
+    
+    # Remove 'Targeted assay detection' section for metabarcoding
+    if assay_type == 'metabarcoding':
+        section_values = sheet_df.iloc[section_row].tolist()
+        cols_to_drop = [col for i, col in enumerate(sheet_df.columns) 
+                       if i < len(section_values) and section_values[i] == 'Targeted assay detection']
+        if cols_to_drop:
+            sheet_df = sheet_df.drop(columns=cols_to_drop)
     
     # Handle detected_notDetected for targeted assays with multiple assay names
     if assay_type == 'targeted' and len(assay_name) > 1:
-        # Find the detected_notDetected column
-        detected_col_idx = None
-        for i, col in enumerate(data[term_name_row_idx]):
-            if col == 'detected_notDetected':
-                detected_col_idx = i
-                break
+        # Find detected_notDetected column
+        detected_col = next((col for col in sheet_df.columns 
+                           if col == 'detected_notDetected'), None)
         
-        if detected_col_idx is not None:
-            # Remove the original column
-            for i in range(len(data)):
-                data[i].pop(detected_col_idx)
+        if detected_col:
+            # Get the requirement level
+            req_level_value = sheet_df.iloc[req_level_row][detected_col]
+            
+            # Drop the original column
+            sheet_df = sheet_df.drop(columns=[detected_col])
             
             # Add new columns for each assay
             for name in assay_name:
-                for i in range(len(data)):
-                    if i == term_name_row_idx:
-                        data[i].append(f'detected_notDetected_{name}')
-                    elif i == req_level_row_idx:
-                        # Copy the requirement level from the original column
-                        data[i].append(req_levels[detected_col_idx] if detected_col_idx < len(req_levels) else '')
-                    else:
-                        data[i].append('')
+                col_name = f'detected_notDetected_{name}'
+                sheet_df[col_name] = ''
+                sheet_df.iloc[term_name_row, sheet_df.columns.get_loc(col_name)] = col_name
+                sheet_df.iloc[req_level_row, sheet_df.columns.get_loc(col_name)] = req_level_value
+                sheet_df.iloc[section_row, sheet_df.columns.get_loc(col_name)] = 'Targeted assay detection'
     
-    # Add user-defined fields if provided
+    # Filter by requirement level
+    req_levels = sheet_df.iloc[req_level_row].tolist()
+    cols_to_keep = [0]  # Always keep the first column
+    cols_to_keep.extend([i for i, level in enumerate(req_levels) 
+                       if (i > 0) and (level in req_lev or pd.isna(level) or level == '')])
+    sheet_df = sheet_df.iloc[:, cols_to_keep]
+    
+    # Add user-defined fields
     if sampleMetadata_user:
-        section_row_idx = None
-        for i, row in enumerate(data):
-            if row and '# section' in row:
-                section_row_idx = i
-                break
-        
         for field in sampleMetadata_user:
-            for i in range(len(data)):
-                if i == term_name_row_idx:
-                    data[i].append(field)
-                elif i == req_level_row_idx:
-                    data[i].append('O')  # Optional for user fields
-                elif i == section_row_idx:
-                    data[i].append('User defined')
-                else:
-                    data[i].append('')
+            sheet_df[field] = ''
+            sheet_df.iloc[term_name_row, sheet_df.columns.get_loc(field)] = field
+            sheet_df.iloc[req_level_row, sheet_df.columns.get_loc(field)] = 'O'
+            sheet_df.iloc[section_row, sheet_df.columns.get_loc(field)] = 'User defined'
     
-    # Resize worksheet to accommodate all data (add some buffer)
-    rows_needed = len(data) + 20  # Add buffer
-    cols_needed = len(data[0]) + 10 if data else 50  # Add buffer
-    worksheet.resize(rows=rows_needed, cols=cols_needed)
+    # Pre-fill assay_name if it exists
+    assay_name_col = next((col for col in sheet_df.columns if col == 'assay_name'), None)
+    if assay_name_col:
+        # Add just one empty row for data entry
+        new_row_idx = term_name_row + 1
+        if new_row_idx >= len(sheet_df):
+            sheet_df.loc[new_row_idx] = ''
+        else:
+            sheet_df.iloc[new_row_idx] = ''
+        
+        # Fill in the assay_name
+        sheet_df.iloc[new_row_idx, sheet_df.columns.get_loc(assay_name_col)] = ' | '.join(assay_name)
+    else:
+        # Add just one empty row for data entry if it doesn't exist already
+        new_row_idx = term_name_row + 1
+        if new_row_idx >= len(sheet_df):
+            sheet_df.loc[new_row_idx] = ''
     
-    # Write data to Google Sheets
+    # Convert to list for Google Sheets
+    data = sheet_df.values.tolist()
+    
+    # Update the worksheet with all data at once - only add a few rows for the user to fill in
+    worksheet.resize(rows=int(term_name_row + 10), cols=int(len(data[0]) + 5))  # Just a few rows needed
     worksheet.update("A1", data)
     
-    # Format headers - make the term_name row bold
-    term_name_range = f"{term_name_row_idx+1}:{term_name_row_idx+1}"
-    header_format = gsf.CellFormat(textFormat=gsf.TextFormat(bold=True))
-    gsf.format_cell_range(worksheet, term_name_range, header_format)
+    # Wait to avoid rate limits
+    time.sleep(2)
+    
+    # Prepare all formatting in a single batch request
+    batch_requests = []
+    
+    # Format header row (term_name row)
+    batch_requests.append({
+        "repeatCell": {
+            "range": {
+                "sheetId": worksheet.id,
+                "startRowIndex": int(term_name_row),
+                "endRowIndex": int(term_name_row) + 1,
+                "startColumnIndex": 0,
+                "endColumnIndex": len(data[0])
+            },
+            "cell": {
+                "userEnteredFormat": {
+                    "textFormat": {
+                        "bold": True
+                    }
+                }
+            },
+            "fields": "userEnteredFormat.textFormat.bold"
+        }
+    })
     
     # Format requirement level cells with colors
-    req_level_col = req_level_row_idx + 1
-    for i, level in enumerate(req_levels):
-        if level in color_styles:
-            cell = f"{chr(64 + req_level_col)}{i+2}"
-            gsf.format_cell_range(worksheet, cell, color_styles[level])
+    for i, level in enumerate(sheet_df.iloc[req_level_row]):
+        if level in color_styles and level in req_lev:
+            # Get color from the color_styles dictionary
+            color_obj = color_styles[level]
+            if hasattr(color_obj, 'backgroundColor'):
+                # Extract RGB values from the color object
+                if hasattr(color_obj.backgroundColor, 'red'):
+                    red = float(color_obj.backgroundColor.red)
+                    green = float(color_obj.backgroundColor.green)
+                    blue = float(color_obj.backgroundColor.blue)
+                    
+                    batch_requests.append({
+                        "repeatCell": {
+                            "range": {
+                                "sheetId": worksheet.id,
+                                "startRowIndex": int(req_level_row),
+                                "endRowIndex": int(req_level_row) + 1,
+                                "startColumnIndex": int(i),
+                                "endColumnIndex": int(i) + 1
+                            },
+                            "cell": {
+                                "userEnteredFormat": {
+                                    "backgroundColor": {
+                                        "red": red,
+                                        "green": green,
+                                        "blue": blue
+                                    }
+                                }
+                            },
+                            "fields": "userEnteredFormat.backgroundColor"
+                        }
+                    })
+    
+    # Get column names for reference
+    term_names = sheet_df.iloc[term_name_row].tolist()
+    
+    # Add dropdowns - only for a few rows to reduce API calls
+    for i, term in enumerate(term_names):
+        if not term or pd.isna(term):
+            continue
+            
+        vocab_row = vocab_df[vocab_df['term_name'] == term]
+        if not vocab_row.empty and 'n_options' in vocab_row.columns:
+            n_options = int(vocab_row.iloc[0]['n_options'])
+            values = [str(vocab_row.iloc[0][f'vocab{j+1}']) for j in range(n_options) 
+                     if f'vocab{j+1}' in vocab_row.columns and pd.notna(vocab_row.iloc[0][f'vocab{j+1}'])]
+            
+            if values:
+                batch_requests.append({
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": worksheet.id,
+                            "startRowIndex": int(term_name_row) + 1,
+                            "endRowIndex": int(term_name_row) + 10,  # Only add validation for a few rows
+                            "startColumnIndex": int(i),
+                            "endColumnIndex": int(i) + 1
+                        },
+                        "rule": {
+                            "condition": {
+                                "type": "ONE_OF_LIST",
+                                "values": [{"userEnteredValue": v} for v in values]
+                            },
+                            "showCustomUi": True
+                        }
+                    }
+                })
+    
+    # Add comments
+    for i, term in enumerate(term_names):
+        if not term or pd.isna(term) or term in (sampleMetadata_user or []):
+            continue
+            
+        term_for_lookup = 'detected_notDetected' if term.startswith('detected_notDetected_') else term
+        term_info = input_df[input_df['term_name'] == term_for_lookup]
+        
+        if not term_info.empty:
+            comment = f"Requirement level: {term_info.iloc[0]['requirement_level']}"
+            if not pd.isna(term_info.iloc[0]['requirement_level_condition']):
+                comment += f" ({term_info.iloc[0]['requirement_level_condition']})"
+            comment += f"\nDescription: {term_info.iloc[0]['description']}"
+            comment += f"\nExample: {term_info.iloc[0]['example']}"
+            comment += f"\nField type: {term_info.iloc[0]['term_type']}"
+            
+            if term_info.iloc[0]['term_type'] == 'controlled vocabulary':
+                comment += f" ({term_info.iloc[0]['controlled_vocabulary_options']})"
+            elif term_info.iloc[0]['term_type'] == 'fixed format':
+                comment += f" ({term_info.iloc[0]['fixed_format']})"
+            
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "startRowIndex": int(term_name_row),
+                        "endRowIndex": int(term_name_row) + 1,
+                        "startColumnIndex": int(i),
+                        "endColumnIndex": int(i) + 1
+                    },
+                    "rows": [{"values": [{"note": comment}]}],
+                    "fields": "note"
+                }
+            })
+    
+    # Apply all formatting in smaller batches to avoid quota limits
+    if batch_requests:
+        # Split requests into smaller batches
+        batch_size = 5  # Process 5 requests at a time
+        for i in range(0, len(batch_requests), batch_size):
+            batch_chunk = batch_requests[i:i+batch_size]
+            try:
+                # Convert any NumPy types to Python native types
+                import json
+                # Serialize and deserialize to convert NumPy types to native Python types
+                batch_json = json.dumps({'requests': batch_chunk}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
+                batch_native = json.loads(batch_json)
+                
+                worksheet.spreadsheet.batch_update(batch_native)
+                # Add delay between batches
+                time.sleep(2)
+            except gspread.exceptions.APIError as e:
+                if "429" in str(e):  # Rate limit error
+                    print(f"Warning: Hit API rate limit at batch {i//batch_size + 1}. Some formatting may not be applied.")
+                    # Try a longer delay and continue with fewer requests
+                    time.sleep(5)
+                    try:
+                        # Try with even smaller batch
+                        for req in batch_chunk:
+                            try:
+                                # Convert any NumPy types to Python native types
+                                req_json = json.dumps({'requests': [req]}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
+                                req_native = json.loads(req_json)
+                                
+                                worksheet.spreadsheet.batch_update(req_native)
+                                time.sleep(1)
+                            except Exception as inner_e:
+                                print(f"Warning: Error applying individual formatting: {str(inner_e)}")
+                    except Exception as batch_e:
+                        print(f"Warning: Error in fallback formatting: {str(batch_e)}")
+                else:
+                    # For other errors, just print a warning and continue
+                    print(f"Warning: Error applying formatting: {str(e)}")
+            except Exception as e:
+                print(f"Warning: Unexpected error: {str(e)}")
 
 def create_other_sheets(worksheets, sheet_names, full_temp_file_name, input_df, req_lev, color_styles, vocab_df):
     """Create and format other sheets based on assay type."""
