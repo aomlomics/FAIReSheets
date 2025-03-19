@@ -38,7 +38,7 @@ from src.helpers.project_metadata_sheet import create_project_metadata_sheet
 from src.helpers.sample_metadata_sheet import create_sample_metadata_sheet
 from src.helpers.experiment_metadata_sheet import create_experiment_metadata_sheet
 from src.helpers.taxa_sheets import create_taxa_sheets
-from src.helpers.other_sheets import create_other_sheets
+from src.helpers.targeted_sheets import create_targeted_sheets
 
 def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
                 sample_type=None, 
@@ -47,6 +47,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
                 assay_name=None, 
                 projectMetadata_user=None,
                 sampleMetadata_user=None,
+                experimentRunMetadata_user=None,
                 input_dir=None):
     """
     Generate FAIR eDNA data templates in Google Sheets
@@ -79,6 +80,10 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     sampleMetadata_user : list, optional
         User-defined fields not listed in the FAIR eDNA metadata checklist.
         These fields will be appended to sampleMetadata.
+        
+    experimentRunMetadata_user : list, optional
+        User-defined fields not listed in the FAIR eDNA metadata checklist.
+        These fields will be appended to experimentRunMetadata.
     
     input_dir : str, optional
         Directory containing the input files. If not provided, the current
@@ -89,17 +94,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     None
         Creates/updates a Google Sheet with the specified template
     """
-    # Print the input parameters for debugging
-    print(f"Starting FAIReSheets with parameters:")
-    print(f"  req_lev: {req_lev}")
-    print(f"  sample_type: {sample_type}")
-    print(f"  assay_type: {assay_type}")
-    print(f"  project_id: {project_id}")
-    print(f"  assay_name: {assay_name}")
-    print(f"  projectMetadata_user: {projectMetadata_user}")
-    print(f"  sampleMetadata_user: {sampleMetadata_user}")
-    print(f"  input_dir: {input_dir}")
-    
+
     # Convert single strings to lists for consistency
     if isinstance(sample_type, str):
         sample_type = [sample_type]
@@ -109,12 +104,16 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         projectMetadata_user = [projectMetadata_user]
     if isinstance(sampleMetadata_user, str):
         sampleMetadata_user = [sampleMetadata_user]
+    if isinstance(experimentRunMetadata_user, str):
+        experimentRunMetadata_user = [experimentRunMetadata_user]
 
     # Initialize empty lists if None was provided
     if projectMetadata_user is None:
         projectMetadata_user = []
     if sampleMetadata_user is None:
         sampleMetadata_user = []
+    if experimentRunMetadata_user is None:
+        experimentRunMetadata_user = []
         
     # Load environment variables
     load_dotenv()
@@ -141,11 +140,12 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     input_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}.xlsx'
     sheet_name = 'checklist'
     
-    # If input_dir is provided, use it to construct full paths
+    # Set the file paths correctly
     if input_dir:
         input_file_path = os.path.join(input_dir, input_file_name)
     else:
-        input_file_path = input_file_name
+        # Look in the 'input' directory by default
+        input_file_path = os.path.join('input', input_file_name)
     
     # Read input checklist
     try:
@@ -158,7 +158,8 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     if input_dir:
         full_temp_file_path = os.path.join(input_dir, full_temp_file_name)
     else:
-        full_temp_file_path = full_temp_file_name
+        # Look in the 'input' directory by default
+        full_temp_file_path = os.path.join('input', full_temp_file_name)
         
     try:
         # Read Excel file using pandas instead of openpyxl directly
@@ -279,7 +280,8 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
             input_df=input_df,
             req_lev=req_lev,
             color_styles=color_styles,
-            vocab_df=vocab_df
+            vocab_df=vocab_df,
+            experimentRunMetadata_user=experimentRunMetadata_user
         )
         
         # Use the specialized function for taxa sheets - process both sheets at once
@@ -295,14 +297,16 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
                 vocab_df=vocab_df
             )
     elif assay_type == 'targeted':
-        create_other_sheets(
+        create_targeted_sheets(
             worksheets=worksheets,
             sheet_names=["stdData", "eLowQuantData", "ampData"],
             full_temp_file_name=full_temp_file_path,
             input_df=input_df,
             req_lev=req_lev,
             color_styles=color_styles,
-            vocab_df=vocab_df
+            vocab_df=vocab_df,
+            project_id=project_id,
+            assay_name=assay_name
         )
         
     # Wait a moment to ensure all operations are complete

@@ -9,7 +9,7 @@ import json
 import gspread_formatting as gsf
 import gspread
 
-def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, req_lev, color_styles, vocab_df):
+def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, req_lev, color_styles, vocab_df, experimentRunMetadata_user=None):
     """Create and format the experimentRunMetadata sheet."""
     
     # Read the template using pandas
@@ -19,16 +19,18 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
     sheet_df = sheet_df.fillna('')
         
     # Find key rows
-    term_name_row = sheet_df.shape[0] - 1  # Last row typically contains term names
-        
-    # Find the requirement level row
+    term_name_row = None
     req_lev_row = None
     section_row = None
+    
     for idx, row in sheet_df.iterrows():
         if '# requirement_level_code' in row.values:
             req_lev_row = idx
         if '# section' in row.values:
             section_row = idx
+        # The term name row is typically the last row with actual field names
+        if any(col for col in row if isinstance(col, str) and not col.startswith('#')):
+            term_name_row = idx
         
     # Filter by requirement level
     if req_lev_row is not None:
@@ -43,6 +45,18 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
         if cols_to_drop:
             sheet_df = sheet_df.drop(columns=sheet_df.columns[cols_to_drop])
     
+    # Add user-defined fields if provided
+    if experimentRunMetadata_user and term_name_row is not None and req_lev_row is not None and section_row is not None:
+        for field in experimentRunMetadata_user:
+            # Create a new column for the user field
+            new_col_idx = sheet_df.shape[1]
+            sheet_df[new_col_idx] = ''
+            
+            # Set the field name, requirement level, and section
+            sheet_df.iloc[term_name_row, new_col_idx] = field
+            sheet_df.iloc[req_lev_row, new_col_idx] = 'O'  # Optional
+            sheet_df.iloc[section_row, new_col_idx] = 'User defined'
+    
     # Convert to list of lists for gspread
     data = sheet_df.values.tolist()
     
@@ -53,6 +67,26 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
     
     # Update the worksheet with all data at once
     worksheet.update("A1", data)
+    
+    # Apply formatting if term_name_row exists
+    if term_name_row is not None:
+        # Format header row (term_name row)
+        header_format = gsf.CellFormat(textFormat=gsf.TextFormat(bold=True))
+        gsf.format_cell_range(worksheet, f"{term_name_row+1}:{term_name_row+1}", header_format)
+    
+    # Apply requirement level colors if req_level_row exists
+    if req_lev_row is not None:
+        for req_code, color_style in color_styles.items():
+            # Find cells with this requirement level
+            for col_idx in range(len(data[0])):
+                if req_lev_row < len(data) and col_idx < len(data[req_lev_row]):
+                    if data[req_lev_row][col_idx] == req_code:
+                        # Apply color to this cell
+                        gsf.format_cell_range(
+                            worksheet, 
+                            f"{chr(65 + col_idx)}{req_lev_row+1}", 
+                            color_style
+                        )
     
     # Wait a moment to avoid rate limits
     time.sleep(1)

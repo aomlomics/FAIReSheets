@@ -10,7 +10,7 @@ spreadsheet_id = "1Tfnhkm2IC8LSheYPFmt8JzUiBm7talV5nebSdMrhVXM"
 
 # Set environment variables directly in the script
 os.environ["SPREADSHEET_ID"] = spreadsheet_id
-os.environ["SERVICE_ACCOUNT_FILE"] = os.path.join(current_dir, "fairesheets-a6c04146b468.json")
+os.environ["SERVICE_ACCOUNT_FILE"] = os.path.join(current_dir, "fairesheets-609bb159302b.json")
 
 print(f"Using credentials file: {os.environ['SERVICE_ACCOUNT_FILE']}")
 print(f"Using spreadsheet ID: {spreadsheet_id}")
@@ -71,13 +71,14 @@ if __name__ == "__main__":
         print("\nRunning FAIReSheets function...")
         FAIReSheets(
             req_lev=config.get('req_lev', ['M', 'HR', 'R', 'O']),
-            sample_type=config.get('sample_type', ['Water']),
-            assay_type=config.get('assay_type', 'metabarcoding'),
-            project_id=config.get('project_id', 'default_project'),
-            assay_name=config.get('assay_name', ['default_assay']),
+            sample_type=config.get('sample_type', None),
+            assay_type=config.get('assay_type', None),
+            project_id=config.get('project_id', None),
+            assay_name=config.get('assay_name', None),
             projectMetadata_user=config.get('projectMetadata_user', None),
             sampleMetadata_user=config.get('sampleMetadata_user', None),
-            input_dir=input_dir  # Pass the input directory to the function
+            experimentRunMetadata_user=config.get('experimentRunMetadata_user', None),
+            input_dir=config.get('input_dir', None)
         )
         
         print("\nFAIReSheets completed successfully!")
