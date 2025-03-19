@@ -1,6 +1,11 @@
 import os
 import sys
 import yaml
+import warnings
+
+# Suppress specific openpyxl warnings about data validation in the console
+warnings.filterwarnings("ignore", category=UserWarning, 
+                       message="Data Validation extension is not supported and will be removed")
 
 # Get the current directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
