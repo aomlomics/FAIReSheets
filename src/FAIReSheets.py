@@ -48,7 +48,8 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
                 projectMetadata_user=None,
                 sampleMetadata_user=None,
                 experimentRunMetadata_user=None,
-                input_dir=None):
+                input_dir=None,
+                client=None):
     """
     Generate FAIR eDNA data templates in Google Sheets
     
@@ -88,6 +89,9 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     input_dir : str, optional
         Directory containing the input files. If not provided, the current
         working directory is used.
+        
+    client : gspread.Client, required
+        Pre-authenticated gspread client from OAuth authentication.
     
     Returns:
     --------
@@ -118,11 +122,9 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     # Load environment variables
     load_dotenv()
     
-    # Authentication setup
-    json_key_file = os.getenv("SERVICE_ACCOUNT_FILE", "fairesheets-609bb159302b.json")
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    credentials = Credentials.from_service_account_file(json_key_file, scopes=scope)
-    client = gspread.authorize(credentials)
+    # Ensure client is provided
+    if client is None:
+        raise ValueError("A pre-authenticated client must be provided. Run this function through run.py.")
     
     # Get spreadsheet ID from .env file
     spreadsheet_id = os.getenv("SPREADSHEET_ID")

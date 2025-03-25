@@ -1,9 +1,9 @@
 # Ignore .env file
 .env 
 
-# Ignore API Token files
+# OAuth authentication files
 token.json
-fairesheets-*.json
+client_secrets.json
 
 # Python artifacts
 __pycache__/

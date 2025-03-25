@@ -12,4 +12,7 @@ dependencies:
     - python-dotenv
     - google-auth
     - gspread
-    - gspread_formatting 
+    - gspread_formatting
+    - google-auth-oauthlib
+    - google-api-python-client
+    - requests 

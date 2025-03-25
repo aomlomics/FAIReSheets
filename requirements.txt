@@ -1,0 +1,10 @@
+pandas
+pyyaml
+numpy
+python-dotenv
+google-auth
+gspread
+gspread_formatting
+google-auth-oauthlib
+google-api-python-client
+requests 
