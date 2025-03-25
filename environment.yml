@@ -15,4 +15,5 @@ dependencies:
     - gspread_formatting
     - google-auth-oauthlib
     - google-api-python-client
-    - requests 
+    - requests
+    - tqdm 

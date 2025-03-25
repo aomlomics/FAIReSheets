@@ -1,25 +1,27 @@
 """
-Module for creating the Drop-down values sheet in FAIReSheets.
+Module for creating the drop-down values sheet in FAIReSheets.
 """
 
-import gspread_formatting as gsf
-
 def create_dropdown_sheet(worksheet, vocab_df, assay_type, assay_name):
-    """Create the Drop-down values sheet with controlled vocabulary options."""
+    """Create and populate a sheet with all dropdown values."""
     
-    # Simply copy the Drop-down values sheet from the template
-    if not vocab_df.empty:
-        # Replace NaN values with empty strings to avoid JSON errors
-        vocab_df_clean = vocab_df.fillna('')
-
-        # Convert DataFrame to list of lists for gspread
-        data = [vocab_df_clean.columns.tolist()] + vocab_df_clean.values.tolist()
-        
-        # Update the worksheet
-        worksheet.update("A1", data)
-        
-        # Format header row
-        header_format = gsf.CellFormat(textFormat=gsf.TextFormat(bold=True))
-        gsf.format_cell_range(worksheet, "1:1", header_format)
-        
-        print("Created Drop-down values sheet") 
+    # Replace NaN values with empty strings
+    vocab_df = vocab_df.fillna('')
+    
+    # Convert to list of lists for gspread
+    data = [vocab_df.columns.tolist()] + vocab_df.values.tolist()
+    
+    # Resize the worksheet to accommodate the data
+    rows_needed = len(data) + 5  # Add buffer
+    cols_needed = len(data[0]) + 2  # Add buffer
+    worksheet.resize(rows=rows_needed, cols=cols_needed)
+    
+    # Update the worksheet
+    worksheet.update("A1", data)
+    
+    # Format the headers
+    worksheet.format("1:1", {
+        "textFormat": {
+            "bold": True
+        }
+    }) 
