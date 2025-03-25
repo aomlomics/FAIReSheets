@@ -1,10 +1,10 @@
 # FAIReSheets
 
-This project is actively under development. Reach out to bayden.willms@noaa.gov for questions.
+This project is actively under development. Reach out to bayden.willms@noaa.gov for questions and for credentials to run this code.
 
-FAIReSheets generates the FAIRe eDNA Data Template in Google Sheets, instead of outputting to Microsoft Excel. It replicates the template creation from the FAIRe-ator Repository from Miwa Takahashi and Stephen Formel: https://github.com/FAIR-eDNA/FAIRe-ator/tree/main 
+FAIReSheets generates the FAIRe eDNA Data Template in Google Sheets. The FAIRe template is a collaborative effort in the eDNA research field to standardize its complicated data and metadata. FAIReSheets replicates the template creation from the [FAIRe-ator Repository](https://github.com/FAIR-eDNA/FAIRe-ator/tree/main) from Dr. Miwa Takahashi and Dr. Stephen Formel, except FAIReSheets outputs the template to Google Sheets rather than a Microsoft Excel spreadsheet. 
 
-TLDR: Create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, run FAIReSheets, and follow the authentication prompts.
+TLDR: Create a blank Google Sheet, email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, configure the `.env` file with your Google Sheet ID and the Git Gist URL, run FAIReSheets and follow the authentication workflow.
 
 ```bash
 python run.py 
@@ -13,17 +13,17 @@ python run.py
 ## Setup
 
 ### Access Request (Required)
-Before using FAIReSheets, you'll need to request access:
+Before using FAIReSheets, you'll need to request access. This only needs to happen once:
 
-1. Email bayden.willms@noaa.gov with the subject "FAIReSheets Access Request"
+1. Email bayden.willms@noaa.gov
 2. Include your Google account email in the request (the one you'll use to access Google Sheets)
-3. You'll receive an email with a Gist URL to add to your `.env` file
+3. You'll receive an email with a Gist URL to add to your `.env` file and confirmation that you've been added to the user list.
 
 ### Installation
 This project works on both macOS and Windows. Ensure you have Git and either Anaconda or pip installed on your computer:
 
 - [Download Git](https://git-scm.com/downloads)
-- [Install Anaconda](https://docs.anaconda.com/anaconda/install/) (recommended)
+- [Install Anaconda](https://docs.anaconda.com/anaconda/install/) OR [Install pip](https://pip.pypa.io/en/stable/installation/) 
 
 #### Clone the GitHub project to your local machine:
 ```bash
@@ -31,15 +31,14 @@ git clone https://github.com/baydenwillms/FAIReSheets.git
 cd FAIReSheets
 ```
 
-#### Option 1: Configure Anaconda environment 
-```bash
-conda env create -f environment.yml 
-conda activate fairesheets-env
-```
-
-#### Option 2: Install with pip
+#### Option 1: Install with pip
 ```bash
 pip install -r requirements.txt
+```
+#### Option 2: Configure Anaconda environment 
+```bash
+conda env create -f environment.yml 
+conda activate fairesheets
 ```
 
 ### Google Sheet Setup
@@ -50,7 +49,7 @@ pip install -r requirements.txt
    - The ID would be `1ABC123XYZ`
 
 ### Configure .env File
-Run the script once and it will create a template `.env` file:
+`.env` files store sensitive variables necessary for running the script. If these variables are properly stored in the `.env` file, they will not be visible on GitHub if you push your local repository publically. Run the script once and it will create a template `.env` file:
 ```bash
 python run.py
 ```
@@ -69,7 +68,7 @@ GIST_URL=https://gist.githubusercontent.com/user/hash/raw/file.json
 
 When you run FAIReSheets for the first time, the following will happen:
 
-1. The tool will download the necessary authentication credentials
+1. The tool will download the authentication credentials from the Git Gist URL sent to you via email
 2. A browser window will open asking you to sign in with your Google account
 3. You'll be asked to grant permission to FAIReSheets to access your Google Sheets
 4. After granting permission, the tool will save a token for future use
@@ -79,11 +78,10 @@ If you see a message saying "Google hasn't verified this app," click "Advanced" 
 
 ## Run
 
-Before running FAIReSheets, configure the `config.yaml` file given your desired parameters. These parameters determine the structure of your generated FAIRe template.
+Before running FAIReSheets, configure the `config.yaml` file given your desired parameters. These parameters determine the structure of your generated FAIRe template. You can also specify additional terms to add if you have relevant fields in your data that are not included in the FAIRe template.
 
-Finally, run FAIReSheets using: 
+Run FAIReSheets from the root project directory using: 
 ```bash
 python run.py
 ```
-
-Or alternatively you can run the `run.py` script in your IDE using the Play button.
+Or alternatively you can run the `run.py` script in your IDE using the Play button. If you are missing things like a `.env` file, authentication credentials, or your spreadsheet ID to edit, the script will prompt you to add those, and/or create a sample `.env` file for you to edit. 

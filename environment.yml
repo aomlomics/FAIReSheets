@@ -1,4 +1,4 @@
-name: fairesheets-env
+name: fairesheets
 channels:
   - conda-forge
   - defaults
