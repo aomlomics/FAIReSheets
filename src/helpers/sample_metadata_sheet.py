@@ -117,8 +117,8 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
     worksheet.resize(rows=int(term_name_row + 10), cols=int(len(data[0]) + 5))  # Just a few rows needed
     worksheet.update("A1", data)
     
-    # Wait to avoid rate limits
-    time.sleep(2)
+    # Wait to avoid rate limits - reduced from 2 seconds to 1 second
+    time.sleep(1)
     
     # Prepare all formatting in a single batch request
     batch_requests = []
@@ -249,8 +249,8 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
     
     # Apply all formatting in smaller batches to avoid quota limits
     if batch_requests:
-        # Split requests into smaller batches
-        batch_size = 5  # Process 5 requests at a time
+        # Split requests into smaller batches - increased from 5 to 8
+        batch_size = 8
         for i in range(0, len(batch_requests), batch_size):
             batch_chunk = batch_requests[i:i+batch_size]
             try:
@@ -260,13 +260,13 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
                 batch_native = json.loads(batch_json)
                 
                 worksheet.spreadsheet.batch_update(batch_native)
-                # Add delay between batches
-                time.sleep(2)
+                # Reduced delay between batches from 2 to 1 second
+                time.sleep(1)
             except gspread.exceptions.APIError as e:
                 if "429" in str(e):  # Rate limit error
                     print(f"Warning: Hit API rate limit at batch {i//batch_size + 1}. Some formatting may not be applied.")
-                    # Try a longer delay and continue with fewer requests
-                    time.sleep(5)
+                    # Try a longer delay and continue with fewer requests - reduced from 5 to 3
+                    time.sleep(3)
                     try:
                         # Try with even smaller batch
                         for req in batch_chunk:
@@ -276,7 +276,7 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
                                 req_native = json.loads(req_json)
                                 
                                 worksheet.spreadsheet.batch_update(req_native)
-                                time.sleep(1)
+                                time.sleep(0.5)  # Reduced from 1 to 0.5 seconds
                             except Exception as inner_e:
                                 print(f"Warning: Error applying individual formatting: {str(inner_e)}")
                     except Exception as batch_e:

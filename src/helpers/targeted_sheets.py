@@ -6,209 +6,244 @@ standard curves, quantitative data, and amplification data.
 """
 
 import pandas as pd
-import gspread_formatting as gsf
+import numpy as np
 import time
+import json
+import gspread_formatting as gsf
+import gspread
 
-def create_targeted_sheets(worksheets, sheet_names, full_temp_file_name, input_df, req_lev, 
+def create_targeted_sheets(worksheets, sheet_names, full_temp_file_path, full_template_df, input_df, req_lev, 
                           color_styles, vocab_df, project_id, assay_name):
     """Create and format targeted assay sheets."""
     
     # Process each sheet
     for sheet_name in sheet_names:
         try:
-            # Get the data from the template
-            sheet_df = pd.read_excel(full_temp_file_name, sheet_name=sheet_name)
+            print(f"\nProcessing {sheet_name} sheet...")
             
-            # Replace NaN values with empty strings immediately after loading
+            # Read the template directly from the Excel file
+            sheet_df = pd.read_excel(full_temp_file_path, sheet_name=sheet_name, header=None)
+            print(f"Successfully read sheet from file: {sheet_name}")
+            
+            # Replace NaN values with empty strings to avoid JSON errors
             sheet_df = sheet_df.fillna('')
             
-            # Find the column positions
-            # Use loc to avoid SettingWithCopyWarning, then get the index
-            try:
-                term_name_row = sheet_df.loc[sheet_df.iloc[:, 0] == 'term_name'].index[0]
-                req_level_row = sheet_df.loc[sheet_df.iloc[:, 0] == 'requirement_level_code'].index[0]
-                section_row = sheet_df.loc[sheet_df.iloc[:, 0] == 'section'].index[0]
-                description_row = sheet_df.loc[sheet_df.iloc[:, 0] == 'description'].index[0]
-            except (IndexError, KeyError) as e:
-                # This is a critical error, so we'll keep this message
-                print(f"Error finding template rows: {e}")
-                continue
+            print(f"Sheet shape: {sheet_df.shape}")
             
-            # Extract the headers and create a new DataFrame for the sheet content
-            headers = sheet_df.iloc[term_name_row].values
-            req_levels = sheet_df.iloc[req_level_row].values
-            sections = sheet_df.iloc[section_row].values
-            descriptions = sheet_df.iloc[description_row].values
+            # For targeted sheets, first two rows are usually:
+            # Row 0: # requirement_level_code M M M...
+            # Row 1: # section PCR PCR...
+            # The actual data columns/fields are in the last row
             
-            # Find the first data row
-            data_start_row = description_row + 1
+            # Find rows with markers (similar to taxa_sheets.py)
+            req_level_row = None
+            section_row = None
+            for idx, row in sheet_df.iterrows():
+                if isinstance(row[0], str) and '# requirement_level_code' in row[0]:
+                    req_level_row = idx
+                    print(f"Found requirement_level_code at row {idx}")
+                if isinstance(row[0], str) and '# section' in row[0]:
+                    section_row = idx
+                    print(f"Found section at row {idx}")
             
-            # Create a new DataFrame for the output
-            output_df = pd.DataFrame(columns=headers)
+            # The term_name row is the last row (with column headers)
+            term_name_row = sheet_df.shape[0] - 1  # Last row contains the actual field names
+            print(f"Using term_name_row = {term_name_row}")
             
-            # Add requirement level, section, and description rows
-            output_df.loc['requirement_level_code'] = req_levels
-            output_df.loc['section'] = sections
-            output_df.loc['description'] = descriptions
+            # For targeted sheets, we don't have a separate description row in the file
+            # Instead, descriptions will be added as notes to cells in Google Sheets
+            description_row = None
             
-            # Filter rows based on requirement levels
-            if req_lev and 'requirement_level_code' in output_df.index:
-                for col in output_df.columns[1:]:  # Skip the first column
-                    req_level = output_df.at['requirement_level_code', col]
-                    if req_level and req_level not in req_lev:
-                        # Remove column by setting values to empty
-                        for row in output_df.index:
-                            output_df.at[row, col] = ''
-            
-            # Add project_id and assay name for first assay (if available)
-            if 'projectID' in output_df.columns:
-                output_df.at['description', 'projectID'] = project_id
-            
-            if 'assayName' in output_df.columns and assay_name and len(assay_name) > 0:
-                output_df.at['description', 'assayName'] = assay_name[0]  # Use first assay name
-            
-            # Convert DataFrame to list of lists for gspread
-            data = [output_df.columns.tolist()]
-            for idx in output_df.index:
-                data.append(output_df.loc[idx].tolist())
-            
-            # Resize worksheet
-            try:
-                rows_needed = len(data) + 10  # Add buffer
-                cols_needed = len(data[0]) + 5  # Add buffer
-                worksheet = worksheets[sheet_name]
-                worksheet.resize(rows=rows_needed, cols=cols_needed)
-            except Exception as e:
-                # Keep this error as it might explain why a sheet is missing
-                print(f"Error resizing worksheet: {e}. Continuing with current size.")
-            
-            # Update the worksheet
-            try:
-                worksheet = worksheets[sheet_name]
-                worksheet.update("A1", data)
-            except Exception as e:
-                # Keep this error as it's critical
-                print(f"Error updating worksheet: {e}. Skipping this sheet.")
-                continue
-            
-            # Format header row with bold text
-            try:
-                header_format = gsf.CellFormat(textFormat=gsf.TextFormat(bold=True))
-                gsf.format_cell_ranges(worksheet, [('1:1', header_format)])
-            except Exception as e:
-                # This is non-critical, so we'll skip the error message
-                pass
-            
-            # Format requirement level column with colors based on values
-            try:
-                # Get the requirement level column
-                req_level_col = 2  # Usually column B
+            # Filter columns based on requirement level
+            if req_level_row is not None:
+                req_lev2rm = [level for level in ['M', 'HR', 'R', 'O'] if level not in req_lev]
+                cols_to_drop = []
                 
-                # Create a list of individual cell formatting requests
-                format_requests = []
+                for col_idx in range(sheet_df.shape[1]):
+                    if sheet_df.iloc[req_level_row, col_idx] in req_lev2rm:
+                        cols_to_drop.append(col_idx)
                 
-                for row_idx in range(1, len(data)):
-                    # Skip the header row (row 0)
-                    if row_idx < len(data) and 0 < req_level_col-1 < len(data[row_idx]):
-                        req_level = data[row_idx][req_level_col-1]
-                        if req_level in color_styles:
-                            cell = f"{chr(64 + req_level_col)}{row_idx+1}"
-                            format_requests.append((cell, color_styles[req_level]))
+                # Drop columns with unwanted requirement levels
+                if cols_to_drop:
+                    sheet_df = sheet_df.drop(columns=sheet_df.columns[cols_to_drop])
+                    print(f"Dropped {len(cols_to_drop)} columns with requirement levels not in {req_lev}")
+            
+            # Convert to list of lists for gspread
+            data = sheet_df.values.tolist()
+            
+            # Resize worksheet to accommodate all data
+            rows_needed = len(data) + 20  # Add buffer
+            cols_needed = len(data[0]) + 10 if data else 50  # Add buffer
+            worksheet = worksheets[sheet_name]
+            worksheet.resize(rows=rows_needed, cols=cols_needed)
+            
+            # Update the worksheet with all data at once
+            worksheet.update("A1", data)
+            
+            # Short delay to avoid rate limits
+            time.sleep(0.5)
+            
+            # Get term names from the last row (these are column names)
+            term_names = []
+            if term_name_row < len(data):
+                term_names = data[term_name_row]
+                print(f"Found term names: {term_names[:5]}...")
+            else:
+                print(f"Warning: term_name_row {term_name_row} is outside data range {len(data)}")
+            
+            # Add project_id and assay_name if columns exist
+            for col_idx, term in enumerate(term_names):
+                if term == 'projectID' and project_id:
+                    # Update the worksheet cell directly
+                    worksheet.update_cell(term_name_row + 2, col_idx + 1, project_id)
+                    print(f"Added project_id '{project_id}' to column {col_idx+1}")
                 
-                # Apply all formatting at once
-                if format_requests:
-                    gsf.format_cell_ranges(worksheet, format_requests)
-            except Exception as e:
-                # This is non-critical, so we'll skip the error message
-                pass
+                if term == 'assayName' and assay_name and len(assay_name) > 0:
+                    # Update the worksheet cell directly
+                    worksheet.update_cell(term_name_row + 2, col_idx + 1, assay_name[0])
+                    print(f"Added assay_name '{assay_name[0]}' to column {col_idx+1}")
             
-            # Prepare to add comments
-            # Get the description row index (usually row 3)
-            desc_row_idx = 3
+            # Prepare batch requests for formatting
+            batch_requests = []
             
-            # Create comments for columns
-            comments = []
-            for col_idx in range(1, len(headers)):
-                if col_idx < len(descriptions):
-                    desc = descriptions[col_idx]
-                    if desc and desc != '':
-                        cell_address = f"{chr(64 + col_idx + 1)}{desc_row_idx}"
-                        comments.append((cell_address, desc))
+            # Format term_name row with bold (same as taxa_sheets)
+            batch_requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "startRowIndex": term_name_row,
+                        "endRowIndex": term_name_row + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": len(data[0])
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat.bold"
+                }
+            })
             
-            # Apply comments in batches to avoid rate limits
-            batch_size = 10
+            # Format requirement level cells with colors
+            if req_level_row is not None:
+                for col_idx, req_level in enumerate(data[req_level_row]):
+                    if req_level in color_styles and req_level in req_lev:
+                        color_obj = color_styles[req_level]
+                        if hasattr(color_obj, 'backgroundColor') and hasattr(color_obj.backgroundColor, 'red'):
+                            red = float(color_obj.backgroundColor.red)
+                            green = float(color_obj.backgroundColor.green)
+                            blue = float(color_obj.backgroundColor.blue)
+                            
+                            batch_requests.append({
+                                "repeatCell": {
+                                    "range": {
+                                        "sheetId": worksheet.id,
+                                        "startRowIndex": req_level_row,
+                                        "endRowIndex": req_level_row + 1,
+                                        "startColumnIndex": col_idx,
+                                        "endColumnIndex": col_idx + 1
+                                    },
+                                    "cell": {
+                                        "userEnteredFormat": {
+                                            "backgroundColor": {
+                                                "red": red,
+                                                "green": green,
+                                                "blue": blue
+                                            }
+                                        }
+                                    },
+                                    "fields": "userEnteredFormat.backgroundColor"
+                                }
+                            })
             
-            for i in range(0, len(comments), batch_size):
-                batch = comments[i:i+batch_size]
-                
-                # Apply each comment in the batch
-                for cell_address, comment_text in batch:
-                    try:
-                        worksheet.update_note(cell_address, comment_text)
-                    except Exception as e:
-                        # Skip commenting errors - they don't affect functionality
-                        pass
-                
-                # Avoid Google API rate limits
-                if i + batch_size < len(comments):
-                    time.sleep(2)
-            
-            # Add dropdown validations if applicable
-            validation_requests = []
-            
-            # Find columns with vocabulary entries
-            for col_idx, header in enumerate(headers):
-                if col_idx == 0:  # Skip row header column
+            # Add dropdowns for vocabulary fields
+            for col_idx, term in enumerate(term_names):
+                if not term or pd.isna(term):
                     continue
                     
-                # Find vocabulary for this term
-                term_name = header
-                vocab_row = vocab_df[vocab_df['term_name'] == term_name]
-                
-                if not vocab_row.empty:
-                    # Get the number of options
+                vocab_row = vocab_df[vocab_df['term_name'] == term]
+                if not vocab_row.empty and 'n_options' in vocab_row.columns:
                     n_options = int(vocab_row.iloc[0]['n_options'])
+                    values = [str(vocab_row.iloc[0][f'vocab{j+1}']) for j in range(n_options) 
+                            if f'vocab{j+1}' in vocab_row.columns and pd.notna(vocab_row.iloc[0][f'vocab{j+1}'])]
                     
-                    # Get the vocabulary values
-                    vocab_values = [str(vocab_row.iloc[0][f'vocab{i+1}']) for i in range(n_options) 
-                                   if i+1 <= len(vocab_row.iloc[0]) and f'vocab{i+1}' in vocab_row.iloc[0].index and pd.notna(vocab_row.iloc[0][f'vocab{i+1}'])]
-                    
-                    if vocab_values:
-                        # Create validation for all rows starting from after the description row
-                        data_start = desc_row_idx + 1  # 1-indexed
-                        
-                        # Create validation rule
-                        validation_rule = {
+                    if values:
+                        batch_requests.append({
                             "setDataValidation": {
                                 "range": {
                                     "sheetId": worksheet.id,
-                                    "startRowIndex": data_start - 1,  # Convert to 0-indexed
-                                    "endRowIndex": rows_needed,
+                                    "startRowIndex": term_name_row + 1,
+                                    "endRowIndex": term_name_row + 20,  # Add validation for several rows
                                     "startColumnIndex": col_idx,
                                     "endColumnIndex": col_idx + 1
                                 },
                                 "rule": {
                                     "condition": {
                                         "type": "ONE_OF_LIST",
-                                        "values": [{"userEnteredValue": v} for v in vocab_values]
+                                        "values": [{"userEnteredValue": v} for v in values]
                                     },
-                                    "showCustomUi": True,
-                                    "strict": False
+                                    "showCustomUi": True
                                 }
                             }
-                        }
-                        validation_requests.append(validation_rule)
+                        })
             
-            # Apply all validations in one batch request
-            if validation_requests:
-                try:
-                    worksheet.spreadsheet.batch_update({"requests": validation_requests})
-                except Exception as e:
-                    # This is non-critical, so we'll skip the error message
-                    # Wait for the rate limit to reset if needed
-                    time.sleep(30)
+            # Add comments with field information
+            for col_idx, term in enumerate(term_names):
+                if not term or pd.isna(term):
+                    continue
+                
+                term_info = input_df[input_df['term_name'] == term]
+                if not term_info.empty:
+                    # Build comment text
+                    comment = f"Requirement level: {term_info.iloc[0]['requirement_level']}"
+                    if not pd.isna(term_info.iloc[0]['requirement_level_condition']):
+                        comment += f" ({term_info.iloc[0]['requirement_level_condition']})"
+                    comment += f"\nDescription: {term_info.iloc[0]['description']}"
+                    comment += f"\nExample: {term_info.iloc[0]['example']}"
+                    comment += f"\nField type: {term_info.iloc[0]['term_type']}"
                     
+                    if term_info.iloc[0]['term_type'] == 'controlled vocabulary':
+                        comment += f" ({term_info.iloc[0]['controlled_vocabulary_options']})"
+                    elif term_info.iloc[0]['term_type'] == 'fixed format':
+                        comment += f" ({term_info.iloc[0]['fixed_format']})"
+                    
+                    batch_requests.append({
+                        "updateCells": {
+                            "range": {
+                                "sheetId": worksheet.id,
+                                "startRowIndex": term_name_row,
+                                "endRowIndex": term_name_row + 1,
+                                "startColumnIndex": col_idx,
+                                "endColumnIndex": col_idx + 1
+                            },
+                            "rows": [{"values": [{"note": comment}]}],
+                            "fields": "note"
+                        }
+                    })
+            
+            # Apply all formatting in smaller batches to avoid quota limits
+            if batch_requests:
+                # Split requests into smaller batches
+                batch_size = 8
+                for i in range(0, len(batch_requests), batch_size):
+                    batch_chunk = batch_requests[i:i+batch_size]
+                    try:
+                        # Convert any NumPy types to Python native types
+                        batch_json = json.dumps({'requests': batch_chunk}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
+                        batch_native = json.loads(batch_json)
+                        
+                        worksheet.spreadsheet.batch_update(batch_native)
+                        time.sleep(0.5)  # Short delay to avoid rate limits
+                    except Exception as e:
+                        print(f"Warning: Unexpected error in batch update: {str(e)}")
+            
+            print(f"Successfully completed {sheet_name} sheet")
+                
         except Exception as e:
-            # This is a critical error, so we'll keep this message
             print(f"Error processing {sheet_name} sheet: {e}")
+            import traceback
+            traceback.print_exc()
             continue

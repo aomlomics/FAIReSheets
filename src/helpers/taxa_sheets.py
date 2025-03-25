@@ -53,8 +53,8 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
     # Update the worksheet with all data at once
     worksheet.update("A1", data)
     
-    # Wait a moment to avoid rate limits
-    time.sleep(1)
+    # Short delay to avoid rate limits (reduced from 1 second)
+    time.sleep(0.5)
     
     # Prepare batch requests for formatting
     batch_requests = []
@@ -183,7 +183,7 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
     # Apply all formatting in smaller batches to avoid quota limits
     if batch_requests:
         # Split requests into smaller batches
-        batch_size = 5  # Process 5 requests at a time
+        batch_size = 8  # Increased from 5 to 8 for faster processing
         for i in range(0, len(batch_requests), batch_size):
             batch_chunk = batch_requests[i:i+batch_size]
             try:
@@ -193,7 +193,7 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
                 batch_native = json.loads(batch_json)
                 
                 worksheet.spreadsheet.batch_update(batch_native)
-                # Add delay between batches
-                time.sleep(1)
+                # Reduce delay between batches from 1 second to 0.5 seconds
+                time.sleep(0.5)
             except Exception as e:
                 print(f"Warning: Unexpected error: {str(e)}") 

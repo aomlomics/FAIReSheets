@@ -367,9 +367,10 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
             pbar.update(1)
             pbar.set_description(f"Experiment Run Metadata created [6/{len(operations)}]")
         else:
-            print("Experiment Run Metadata sheet created (6/{})".format(len(operations)))
+            current_operation = operations.index("experimentRunMetadata") + 1
+            print(f"Experiment Run Metadata sheet created ({current_operation}/{len(operations)})")
         
-        # Use the specialized function for taxa sheets - process both sheets at once
+        # Create both taxa sheets in efficient sequence
         taxa_sheet_names = ["taxaRaw", "taxaFinal"]
         for sheet_name in taxa_sheet_names:
             # Taxa sheets can also be slow
@@ -399,14 +400,18 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         # Get the targeted sheet names
         targeted_sheet_names = ["stdData", "eLowQuantData", "ampData"]
         
-        # Targeted sheets can be slow
+        # Targeted sheets can be slow - process all together for efficiency
         if TQDM_AVAILABLE:
             pbar.set_description("Creating targeted assay sheets...")
+        
+        # Print debugging info
+        print(f"Available template sheets: {list(full_template_df.keys())}")
         
         create_targeted_sheets(
             worksheets=worksheets,
             sheet_names=targeted_sheet_names,
-            full_temp_file_name=full_temp_file_path,
+            full_temp_file_path=full_temp_file_path,
+            full_template_df=full_template_df,  # Pass the pre-loaded DataFrame dictionary
             input_df=input_df,
             req_lev=req_lev,
             color_styles=color_styles,
@@ -415,7 +420,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
             assay_name=assay_name
         )
         
-        # Update progress bar for all three targeted sheets
+        # Update progress bar for all three targeted sheets at once
         for sheet_name in targeted_sheet_names:
             if TQDM_AVAILABLE:
                 pbar.update(1)
@@ -425,8 +430,8 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
                 current_operation = operations.index(sheet_name) + 1
                 print(f"{sheet_name} sheet created ({current_operation}/{len(operations)})")
         
-    # Wait a moment to ensure all operations are complete
-    time.sleep(1)
+    # No wait time needed - all operations are already complete
+    # time.sleep(1)  # Remove this sleep as it's unnecessary
     
     # Close the progress bar if it exists
     if TQDM_AVAILABLE:

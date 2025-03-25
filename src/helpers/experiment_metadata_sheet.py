@@ -88,8 +88,8 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
                             color_style
                         )
     
-    # Wait a moment to avoid rate limits
-    time.sleep(1)
+    # Reduced wait time (from 1 second to 0.5)
+    time.sleep(0.5)
         
     # Prepare batch requests for formatting
     batch_requests = []
@@ -217,8 +217,8 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
     
     # Apply all formatting in smaller batches to avoid quota limits
     if batch_requests:
-        # Split requests into smaller batches
-        batch_size = 5  # Process 5 requests at a time
+        # Split requests into smaller batches - increased from 5 to 8
+        batch_size = 8
         for i in range(0, len(batch_requests), batch_size):
             batch_chunk = batch_requests[i:i+batch_size]
             try:
@@ -228,13 +228,13 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
                 batch_native = json.loads(batch_json)
                 
                 worksheet.spreadsheet.batch_update(batch_native)
-                # Add delay between batches
-                time.sleep(1)
+                # Reduced delay between batches from 1 to 0.5 seconds
+                time.sleep(0.5)
             except gspread.exceptions.APIError as e:
                 if "429" in str(e):  # Rate limit error
                     print(f"Warning: Hit API rate limit at batch {i//batch_size + 1}. Some formatting may not be applied.")
                     # Try a longer delay and continue with fewer requests
-                    time.sleep(5)
+                    time.sleep(3)  # Reduced from 5 to 3 seconds
                     try:
                         # Try with even smaller batch
                         for req in batch_chunk:
@@ -244,7 +244,7 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
                                 req_native = json.loads(req_json)
                                 
                                 worksheet.spreadsheet.batch_update(req_native)
-                                time.sleep(1)
+                                time.sleep(0.5)  # Reduced from 1 to 0.5 seconds
                             except Exception as inner_e:
                                 print(f"Warning: Error applying individual formatting: {str(inner_e)}")
                     except Exception as batch_e:
