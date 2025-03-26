@@ -4,7 +4,7 @@ This project is actively under development. Reach out to bayden.willms@noaa.gov 
 
 FAIReSheets generates the FAIRe eDNA Data Template in Google Sheets. The FAIRe template is a collaborative effort in the eDNA research field to standardize its complicated data and metadata. FAIReSheets replicates the template creation from the [FAIRe-ator Repository](https://github.com/FAIR-eDNA/FAIRe-ator/tree/main) from Dr. Miwa Takahashi and Dr. Stephen Formel, except FAIReSheets outputs the template to Google Sheets rather than a Microsoft Excel spreadsheet. 
 
-TLDR: Create a blank Google Sheet, email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, configure the `.env` file with your Google Sheet ID and the Git Gist URL, run FAIReSheets and follow the authentication workflow.
+TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, run FAIReSheets and follow the authentication workflow.
 
 ```bash
 python run.py 
@@ -85,3 +85,6 @@ Run FAIReSheets from the root project directory using:
 python run.py
 ```
 Or alternatively you can run the `run.py` script in your IDE using the Play button. If you are missing things like a `.env` file, authentication credentials, or your spreadsheet ID to edit, the script will prompt you to add those, and/or create a sample `.env` file for you to edit. 
+
+## Disclaimer
+This repository is a scientific product and is not official communication of the National Oceanic and Atmospheric Administration, or the United States Department of Commerce. All NOAA GitHub project code is provided on an 'as is' basis and the user assumes responsibility for its use. Any claims against the Department of Commerce or Department of Commerce bureaus stemming from the use of this GitHub project will be governed by all applicable Federal law. Any reference to specific commercial products, processes, or services by service mark, trademark, manufacturer, or otherwise, does not constitute or imply their endorsement, recommendation or favoring by the Department of Commerce. The Department of Commerce seal and logo, or the seal and logo of a DOC bureau, shall not be used in any manner to imply endorsement of any commercial product or activity by DOC or the United States Government.
