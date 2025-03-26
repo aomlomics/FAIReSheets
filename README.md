@@ -86,5 +86,73 @@ python run.py
 ```
 Or alternatively you can run the `run.py` script in your IDE using the Play button. If you are missing things like a `.env` file, authentication credentials, or your spreadsheet ID to edit, the script will prompt you to add those, and/or create a sample `.env` file for you to edit. 
 
+## Optional (recommended)
+
+To automatically track modifications in your Google Sheet, you can use the following Apps Script. This script updates the modification timestamp and user email in the README sheet whenever an edit is made to any sheet except "README" and "Drop-down values".
+
+### Steps to Add the Apps Script
+
+1. Open your Google Sheet.
+2. Click on `Extensions` in the menu, then select `Apps Script`.
+3. Delete any code in the script editor and copy-paste the following code:
+
+    ```javascript
+    function onEdit(e) {
+      var sheet = e.source.getActiveSheet();
+      var sheetName = sheet.getName();
+      
+      // Skip README and Drop-down values sheets
+      if (sheetName === "README" || sheetName === "Drop-down values") {
+        return;
+      }
+      
+      var readmeSheet = e.source.getSheetByName("README");
+      if (!readmeSheet) {
+        return;
+      }
+      
+      // Find the Modification Timestamp section
+      var data = readmeSheet.getDataRange().getValues();
+      var timestampRowStart = -1;
+      
+      for (var i = 0; i < data.length; i++) {
+        if (data[i][0] === "Modification Timestamp:") {
+          timestampRowStart = i + 2; // +2 to skip the header row
+          break;
+        }
+      }
+      
+      if (timestampRowStart === -1) {
+        return;
+      }
+      
+      // Find the row for the current sheet
+      var sheetRow = -1;
+      for (var i = timestampRowStart; i < data.length; i++) {
+        if (data[i][0] === sheetName) {
+          sheetRow = i + 1; // +1 because arrays are 0-indexed but sheets are 1-indexed
+          break;
+        }
+      }
+      
+      if (sheetRow === -1) {
+        return;
+      }
+      
+      // Get current time in ISO format
+      var now = new Date();
+      var timestamp = now.toISOString(); // This gives format like "2025-01-29T13:49:09.123Z"
+      
+      // Update the timestamp and email
+      readmeSheet.getRange(sheetRow, 2).setValue(timestamp);
+      readmeSheet.getRange(sheetRow, 3).setValue(Session.getActiveUser().getEmail());
+    }
+    ```
+
+4. Click the disk icon or `File > Save` to save the script.
+5. Close the Apps Script editor.
+
+Now, whenever you make an edit to any sheet (except "README" and "Drop-down values"), the modification timestamp and your email will be automatically updated in the README sheet.
+
 ## Disclaimer
 This repository is a scientific product and is not official communication of the National Oceanic and Atmospheric Administration, or the United States Department of Commerce. All NOAA GitHub project code is provided on an 'as is' basis and the user assumes responsibility for its use. Any claims against the Department of Commerce or Department of Commerce bureaus stemming from the use of this GitHub project will be governed by all applicable Federal law. Any reference to specific commercial products, processes, or services by service mark, trademark, manufacturer, or otherwise, does not constitute or imply their endorsement, recommendation or favoring by the Department of Commerce. The Department of Commerce seal and logo, or the seal and logo of a DOC bureau, shall not be used in any manner to imply endorsement of any commercial product or activity by DOC or the United States Government.

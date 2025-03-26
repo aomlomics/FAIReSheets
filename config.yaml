@@ -7,7 +7,7 @@ sample_type:
   - Water
   - Sediment
 assay_type: metabarcoding
-project_id: noaa-aoml-auth-testing
+project_id: noaa-aoml-myproject
 assay_name:
   - ssu16sv4v5-parada
   - ssu18sv4-stoeck
