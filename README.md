@@ -64,18 +64,6 @@ SPREADSHEET_ID=your_spreadsheet_id_here
 GIST_URL=https://gist.githubusercontent.com/user/hash/raw/file.json
 ```
 
-## Authentication
-
-When you run FAIReSheets for the first time, the following will happen:
-
-1. The tool will download the authentication credentials from the Git Gist URL sent to you via email
-2. A browser window will open asking you to sign in with your Google account
-3. You'll be asked to grant permission to FAIReSheets to access your Google Sheets
-4. After granting permission, the tool will save a token for future use
-5. Future runs won't require reauthentication
-
-If you see a message saying "Google hasn't verified this app," click "Advanced" and then "Go to FAIReSheets (unsafe)" to proceed. This is normal for specialized tools that haven't gone through Google's verification process.
-
 ## Run
 
 Before running FAIReSheets, configure the `config.yaml` file given your desired parameters. These parameters determine the structure of your generated FAIRe template. You can also specify additional terms to add if you have relevant fields in your data that are not included in the FAIRe template.
@@ -85,6 +73,18 @@ Run FAIReSheets from the root project directory using:
 python run.py
 ```
 Or alternatively you can run the `run.py` script in your IDE using the Play button. If you are missing things like a `.env` file, authentication credentials, or your spreadsheet ID to edit, the script will prompt you to add those, and/or create a sample `.env` file for you to edit. 
+
+## Run > Authentication
+
+When you run FAIReSheets for the first time, the following will happen:
+
+1. The tool will download the authentication credentials from the Git Gist URL sent to you via email
+2. A browser window will open asking you to sign in with your Google account
+3. You'll be asked to grant permission to FAIReSheets to access your Google Sheets
+4. After granting permission, the tool will save a token for future use
+5. Future runs won't require reauthentication
+
+If you see a message saying "Google hasn't verified this app", click "Advanced" and then "Go to FAIReSheets (unsafe)" to proceed. This is normal for specialized tools that haven't gone through Google's verification process.
 
 ## Optional (recommended)
 
