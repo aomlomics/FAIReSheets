@@ -7,6 +7,7 @@ dependencies:
   - pandas
   - pyyaml
   - numpy
+  - openpyxl
   - pip
   - pip:
     - python-dotenv
