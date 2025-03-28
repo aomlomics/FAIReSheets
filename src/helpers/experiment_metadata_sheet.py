@@ -68,29 +68,6 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
     # Update the worksheet with all data at once
     worksheet.update("A1", data)
     
-    # Apply formatting if term_name_row exists
-    if term_name_row is not None:
-        # Format header row (term_name row)
-        header_format = gsf.CellFormat(textFormat=gsf.TextFormat(bold=True))
-        gsf.format_cell_range(worksheet, f"{term_name_row+1}:{term_name_row+1}", header_format)
-    
-    # Apply requirement level colors if req_level_row exists
-    if req_lev_row is not None:
-        for req_code, color_style in color_styles.items():
-            # Find cells with this requirement level
-            for col_idx in range(len(data[0])):
-                if req_lev_row < len(data) and col_idx < len(data[req_lev_row]):
-                    if data[req_lev_row][col_idx] == req_code:
-                        # Apply color to this cell
-                        gsf.format_cell_range(
-                            worksheet, 
-                            f"{chr(65 + col_idx)}{req_lev_row+1}", 
-                            color_style
-                        )
-    
-    # Reduced wait time (from 1 second to 0.5)
-    time.sleep(0.5)
-        
     # Prepare batch requests for formatting
     batch_requests = []
     
@@ -121,10 +98,6 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
             if req_level in color_styles and req_level in req_lev:
                 color_obj = color_styles[req_level]
                 if hasattr(color_obj, 'backgroundColor') and hasattr(color_obj.backgroundColor, 'red'):
-                    red = float(color_obj.backgroundColor.red)
-                    green = float(color_obj.backgroundColor.green)
-                    blue = float(color_obj.backgroundColor.blue)
-                    
                     batch_requests.append({
                         "repeatCell": {
                             "range": {
@@ -137,9 +110,9 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
                             "cell": {
                                 "userEnteredFormat": {
                                     "backgroundColor": {
-                                        "red": red,
-                                        "green": green,
-                                        "blue": blue
+                                        "red": float(color_obj.backgroundColor.red),
+                                        "green": float(color_obj.backgroundColor.green),
+                                        "blue": float(color_obj.backgroundColor.blue)
                                     }
                                 }
                             },
@@ -150,11 +123,12 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
     # Get column names from the term_name row
     term_names = data[term_name_row] if term_name_row < len(data) else []
         
-    # Add dropdowns for vocabulary fields
+    # Add dropdowns and comments in batches
     for col_idx, term in enumerate(term_names):
         if not term or pd.isna(term):
             continue
             
+        # Handle dropdowns
         vocab_row = vocab_df[vocab_df['term_name'] == term]
         if not vocab_row.empty and 'n_options' in vocab_row.columns:
             n_options = int(vocab_row.iloc[0]['n_options'])
@@ -167,7 +141,7 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
                         "range": {
                             "sheetId": worksheet.id,
                             "startRowIndex": term_name_row + 1,
-                            "endRowIndex": term_name_row + 20,  # Add validation for several rows
+                            "endRowIndex": term_name_row + 20,
                             "startColumnIndex": col_idx,
                             "endColumnIndex": col_idx + 1
                         },
@@ -180,15 +154,10 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
                         }
                     }
                 })
-    
-    # Add comments with field information
-    for col_idx, term in enumerate(term_names):
-        if not term or pd.isna(term):
-            continue
         
+        # Handle comments
         term_info = input_df[input_df['term_name'] == term]
         if not term_info.empty:
-            # Build comment text
             comment = f"Requirement level: {term_info.iloc[0]['requirement_level']}"
             if not pd.isna(term_info.iloc[0]['requirement_level_condition']):
                 comment += f" ({term_info.iloc[0]['requirement_level_condition']})"
@@ -215,42 +184,17 @@ def create_experiment_metadata_sheet(worksheet, full_temp_file_name, input_df, r
                 }
             })
     
-    # Apply all formatting in smaller batches to avoid quota limits
+    # Apply all formatting, dropdowns, and notes in one batch
     if batch_requests:
-        # Split requests into smaller batches - increased from 5 to 8
-        batch_size = 8
-        for i in range(0, len(batch_requests), batch_size):
-            batch_chunk = batch_requests[i:i+batch_size]
-            try:
-                # Convert any NumPy types to Python native types
-                # Serialize and deserialize to convert NumPy types to native Python types
-                batch_json = json.dumps({'requests': batch_chunk}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
-                batch_native = json.loads(batch_json)
-                
-                worksheet.spreadsheet.batch_update(batch_native)
-                # Reduced delay between batches from 1 to 0.5 seconds
-                time.sleep(0.5)
-            except gspread.exceptions.APIError as e:
-                if "429" in str(e):  # Rate limit error
-                    print(f"Warning: Hit API rate limit at batch {i//batch_size + 1}. Some formatting may not be applied.")
-                    # Try a longer delay and continue with fewer requests
-                    time.sleep(3)  # Reduced from 5 to 3 seconds
-                    try:
-                        # Try with even smaller batch
-                        for req in batch_chunk:
-                            try:
-                                # Convert any NumPy types to Python native types
-                                req_json = json.dumps({'requests': [req]}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
-                                req_native = json.loads(req_json)
-                                
-                                worksheet.spreadsheet.batch_update(req_native)
-                                time.sleep(0.5)  # Reduced from 1 to 0.5 seconds
-                            except Exception as inner_e:
-                                print(f"Warning: Error applying individual formatting: {str(inner_e)}")
-                    except Exception as batch_e:
-                        print(f"Warning: Error in fallback formatting: {str(batch_e)}")
-                else:
-                    # For other errors, just print a warning and continue
-                    print(f"Warning: Error applying formatting: {str(e)}")
-            except Exception as e:
-                print(f"Warning: Unexpected error: {str(e)}") 
+        try:
+            worksheet.spreadsheet.batch_update({'requests': batch_requests})
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e):  # Rate limit error
+                print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
+                time.sleep(60)  # Wait a full minute
+                worksheet.spreadsheet.batch_update({'requests': batch_requests})
+            else:
+                raise
+    
+    # Reduced wait time (from 1 second to 0.5)
+    time.sleep(0.5) 

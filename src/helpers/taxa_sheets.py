@@ -7,6 +7,7 @@ import numpy as np
 import time
 import json
 import gspread_formatting as gsf
+import gspread
 
 def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req_lev, color_styles, vocab_df):
     """Create and format taxa sheets (taxaRaw or taxaFinal)."""
@@ -53,13 +54,10 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
     # Update the worksheet with all data at once
     worksheet.update("A1", data)
     
-    # Short delay to avoid rate limits (reduced from 1 second)
-    time.sleep(0.5)
-    
     # Prepare batch requests for formatting
     batch_requests = []
     
-    # Format term_name row with bold
+    # Format term_name row with bold and requirement level colors
     batch_requests.append({
         "repeatCell": {
             "range": {
@@ -86,10 +84,6 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
             if req_level in color_styles and req_level in req_lev:
                 color_obj = color_styles[req_level]
                 if hasattr(color_obj, 'backgroundColor') and hasattr(color_obj.backgroundColor, 'red'):
-                    red = float(color_obj.backgroundColor.red)
-                    green = float(color_obj.backgroundColor.green)
-                    blue = float(color_obj.backgroundColor.blue)
-                    
                     batch_requests.append({
                         "repeatCell": {
                             "range": {
@@ -102,9 +96,9 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
                             "cell": {
                                 "userEnteredFormat": {
                                     "backgroundColor": {
-                                        "red": red,
-                                        "green": green,
-                                        "blue": blue
+                                        "red": float(color_obj.backgroundColor.red),
+                                        "green": float(color_obj.backgroundColor.green),
+                                        "blue": float(color_obj.backgroundColor.blue)
                                     }
                                 }
                             },
@@ -115,11 +109,12 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
     # Get column names from the term_name row
     term_names = data[term_name_row] if term_name_row < len(data) else []
     
-    # Add dropdowns for vocabulary fields
+    # Add dropdowns and comments in batches
     for col_idx, term in enumerate(term_names):
         if not term or pd.isna(term):
             continue
             
+        # Handle dropdowns
         vocab_row = vocab_df[vocab_df['term_name'] == term]
         if not vocab_row.empty and 'n_options' in vocab_row.columns:
             n_options = int(vocab_row.iloc[0]['n_options'])
@@ -132,7 +127,7 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
                         "range": {
                             "sheetId": worksheet.id,
                             "startRowIndex": term_name_row + 1,
-                            "endRowIndex": term_name_row + 20,  # Add validation for several rows
+                            "endRowIndex": term_name_row + 20,
                             "startColumnIndex": col_idx,
                             "endColumnIndex": col_idx + 1
                         },
@@ -145,15 +140,10 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
                         }
                     }
                 })
-    
-    # Add comments with field information
-    for col_idx, term in enumerate(term_names):
-        if not term or pd.isna(term):
-            continue
         
+        # Handle comments
         term_info = input_df[input_df['term_name'] == term]
         if not term_info.empty:
-            # Build comment text
             comment = f"Requirement level: {term_info.iloc[0]['requirement_level']}"
             if not pd.isna(term_info.iloc[0]['requirement_level_condition']):
                 comment += f" ({term_info.iloc[0]['requirement_level_condition']})"
@@ -180,20 +170,14 @@ def create_taxa_sheets(worksheet, sheet_name, full_temp_file_name, input_df, req
                 }
             })
     
-    # Apply all formatting in smaller batches to avoid quota limits
+    # Apply all formatting, dropdowns, and notes in one batch
     if batch_requests:
-        # Split requests into smaller batches
-        batch_size = 8  # Increased from 5 to 8 for faster processing
-        for i in range(0, len(batch_requests), batch_size):
-            batch_chunk = batch_requests[i:i+batch_size]
-            try:
-                # Convert any NumPy types to Python native types
-                # Serialize and deserialize to convert NumPy types to native Python types
-                batch_json = json.dumps({'requests': batch_chunk}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
-                batch_native = json.loads(batch_json)
-                
-                worksheet.spreadsheet.batch_update(batch_native)
-                # Reduce delay between batches from 1 second to 0.5 seconds
-                time.sleep(0.5)
-            except Exception as e:
-                print(f"Warning: Unexpected error: {str(e)}") 
+        try:
+            worksheet.spreadsheet.batch_update({'requests': batch_requests})
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e):  # Rate limit error
+                print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
+                time.sleep(60)  # Wait a full minute
+                worksheet.spreadsheet.batch_update({'requests': batch_requests})
+            else:
+                raise 

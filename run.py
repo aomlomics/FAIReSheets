@@ -97,7 +97,6 @@ print("\n===================================================")
 print(f"Generating FAIR eDNA template for project: {project_id}")
 print("===================================================")
 print("Starting template generation process. This may take up to 2 minutes.")
-print("A progress bar will show the status of each sheet being generated.")
 print("Please be patient and do not close the application during this process. If you think the code is frozen, open the Google Sheet in your browser and watch the progress.\n")
 
 try:

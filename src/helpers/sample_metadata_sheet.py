@@ -7,6 +7,7 @@ import numpy as np
 import time
 import json
 import gspread_formatting as gsf
+import gspread
 
 def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_lev, sample_type,
                                  assay_type, assay_name, sampleMetadata_user, color_styles, vocab_df):
@@ -117,10 +118,7 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
     worksheet.resize(rows=int(term_name_row + 10), cols=int(len(data[0]) + 5))  # Just a few rows needed
     worksheet.update("A1", data)
     
-    # Wait to avoid rate limits - reduced from 2 seconds to 1 second
-    time.sleep(1)
-    
-    # Prepare all formatting in a single batch request
+    # Prepare batch requests for formatting
     batch_requests = []
     
     # Format header row (term_name row)
@@ -128,8 +126,8 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
         "repeatCell": {
             "range": {
                 "sheetId": worksheet.id,
-                "startRowIndex": int(term_name_row),
-                "endRowIndex": int(term_name_row) + 1,
+                "startRowIndex": term_name_row,
+                "endRowIndex": term_name_row + 1,
                 "startColumnIndex": 0,
                 "endColumnIndex": len(data[0])
             },
@@ -152,25 +150,21 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
             if hasattr(color_obj, 'backgroundColor'):
                 # Extract RGB values from the color object
                 if hasattr(color_obj.backgroundColor, 'red'):
-                    red = float(color_obj.backgroundColor.red)
-                    green = float(color_obj.backgroundColor.green)
-                    blue = float(color_obj.backgroundColor.blue)
-                    
                     batch_requests.append({
                         "repeatCell": {
                             "range": {
                                 "sheetId": worksheet.id,
-                                "startRowIndex": int(req_level_row),
-                                "endRowIndex": int(req_level_row) + 1,
-                                "startColumnIndex": int(i),
-                                "endColumnIndex": int(i) + 1
+                                "startRowIndex": req_level_row,
+                                "endRowIndex": req_level_row + 1,
+                                "startColumnIndex": i,
+                                "endColumnIndex": i + 1
                             },
                             "cell": {
                                 "userEnteredFormat": {
                                     "backgroundColor": {
-                                        "red": red,
-                                        "green": green,
-                                        "blue": blue
+                                        "red": float(color_obj.backgroundColor.red),
+                                        "green": float(color_obj.backgroundColor.green),
+                                        "blue": float(color_obj.backgroundColor.blue)
                                     }
                                 }
                             },
@@ -181,11 +175,15 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
     # Get column names for reference
     term_names = sheet_df.iloc[term_name_row].tolist()
     
-    # Add dropdowns - only for a few rows to reduce API calls
+    # Prepare note updates list
+    note_updates = []
+    
+    # Add dropdowns and comments in batches
     for i, term in enumerate(term_names):
-        if not term or pd.isna(term):
+        if not term or pd.isna(term) or term in (sampleMetadata_user or []):
             continue
             
+        # Handle dropdowns
         vocab_row = vocab_df[vocab_df['term_name'] == term]
         if not vocab_row.empty and 'n_options' in vocab_row.columns:
             n_options = int(vocab_row.iloc[0]['n_options'])
@@ -197,10 +195,10 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
                     "setDataValidation": {
                         "range": {
                             "sheetId": worksheet.id,
-                            "startRowIndex": int(term_name_row) + 1,
-                            "endRowIndex": int(term_name_row) + 10,  # Only add validation for a few rows
-                            "startColumnIndex": int(i),
-                            "endColumnIndex": int(i) + 1
+                            "startRowIndex": term_name_row + 1,
+                            "endRowIndex": term_name_row + 10,
+                            "startColumnIndex": i,
+                            "endColumnIndex": i + 1
                         },
                         "rule": {
                             "condition": {
@@ -211,12 +209,8 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
                         }
                     }
                 })
-    
-    # Add comments
-    for i, term in enumerate(term_names):
-        if not term or pd.isna(term) or term in (sampleMetadata_user or []):
-            continue
-            
+        
+        # Handle comments
         term_for_lookup = 'detected_notDetected' if term.startswith('detected_notDetected_') else term
         term_info = input_df[input_df['term_name'] == term_for_lookup]
         
@@ -233,56 +227,39 @@ def create_sample_metadata_sheet(worksheet, full_temp_file_name, input_df, req_l
             elif term_info.iloc[0]['term_type'] == 'fixed format':
                 comment += f" ({term_info.iloc[0]['fixed_format']})"
             
+            note_updates.append({
+                "range": f"{chr(65+i)}{term_name_row+1}",
+                "note": comment
+            })
+    
+    # Apply all notes in one batch if supported by gspread
+    if note_updates:
+        # Add note requests to batch_requests
+        for note in note_updates:
             batch_requests.append({
                 "updateCells": {
                     "range": {
                         "sheetId": worksheet.id,
-                        "startRowIndex": int(term_name_row),
-                        "endRowIndex": int(term_name_row) + 1,
-                        "startColumnIndex": int(i),
-                        "endColumnIndex": int(i) + 1
+                        "startRowIndex": term_name_row,
+                        "endRowIndex": term_name_row + 1,
+                        "startColumnIndex": ord(note["range"][0]) - 65,  # Convert A to 0, B to 1, etc.
+                        "endColumnIndex": ord(note["range"][0]) - 64
                     },
-                    "rows": [{"values": [{"note": comment}]}],
+                    "rows": [{"values": [{"note": note["note"]}]}],
                     "fields": "note"
                 }
             })
+        
+        # Apply all formatting and notes in one batch
+        try:
+            worksheet.spreadsheet.batch_update({'requests': batch_requests})
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e):  # Rate limit error
+                print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
+                time.sleep(60)  # Wait a full minute
+                worksheet.spreadsheet.batch_update({'requests': batch_requests})
+            else:
+                raise
     
-    # Apply all formatting in smaller batches to avoid quota limits
-    if batch_requests:
-        # Split requests into smaller batches - increased from 5 to 8
-        batch_size = 8
-        for i in range(0, len(batch_requests), batch_size):
-            batch_chunk = batch_requests[i:i+batch_size]
-            try:
-                # Convert any NumPy types to Python native types
-                # Serialize and deserialize to convert NumPy types to native Python types
-                batch_json = json.dumps({'requests': batch_chunk}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
-                batch_native = json.loads(batch_json)
-                
-                worksheet.spreadsheet.batch_update(batch_native)
-                # Reduced delay between batches from 2 to 1 second
-                time.sleep(1)
-            except gspread.exceptions.APIError as e:
-                if "429" in str(e):  # Rate limit error
-                    print(f"Warning: Hit API rate limit at batch {i//batch_size + 1}. Some formatting may not be applied.")
-                    # Try a longer delay and continue with fewer requests - reduced from 5 to 3
-                    time.sleep(3)
-                    try:
-                        # Try with even smaller batch
-                        for req in batch_chunk:
-                            try:
-                                # Convert any NumPy types to Python native types
-                                req_json = json.dumps({'requests': [req]}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
-                                req_native = json.loads(req_json)
-                                
-                                worksheet.spreadsheet.batch_update(req_native)
-                                time.sleep(0.5)  # Reduced from 1 to 0.5 seconds
-                            except Exception as inner_e:
-                                print(f"Warning: Error applying individual formatting: {str(inner_e)}")
-                    except Exception as batch_e:
-                        print(f"Warning: Error in fallback formatting: {str(batch_e)}")
-                else:
-                    # For other errors, just print a warning and continue
-                    print(f"Warning: Error applying formatting: {str(e)}")
-            except Exception as e:
-                print(f"Warning: Unexpected error: {str(e)}") 
+    # Wait to avoid rate limits - reduced from 2 seconds to 1 second
+    time.sleep(1) 

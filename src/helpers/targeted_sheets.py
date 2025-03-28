@@ -80,33 +80,10 @@ def create_targeted_sheets(worksheets, sheet_names, full_temp_file_path, full_te
             # Update the worksheet with all data at once
             worksheet.update("A1", data)
             
-            # Short delay to avoid rate limits
-            time.sleep(0.5)
-            
-            # Get term names from the last row (these are column names)
-            term_names = []
-            if term_name_row < len(data):
-                term_names = data[term_name_row]
-                print(f"Found term names: {term_names[:5]}...")
-            else:
-                print(f"Warning: term_name_row {term_name_row} is outside data range {len(data)}")
-            
-            # Add project_id and assay_name if columns exist
-            for col_idx, term in enumerate(term_names):
-                if term == 'projectID' and project_id:
-                    # Update the worksheet cell directly
-                    worksheet.update_cell(term_name_row + 2, col_idx + 1, project_id)
-                    print(f"Added project_id '{project_id}' to column {col_idx+1}")
-                
-                if term == 'assayName' and assay_name and len(assay_name) > 0:
-                    # Update the worksheet cell directly
-                    worksheet.update_cell(term_name_row + 2, col_idx + 1, assay_name[0])
-                    print(f"Added assay_name '{assay_name[0]}' to column {col_idx+1}")
-            
             # Prepare batch requests for formatting
             batch_requests = []
             
-            # Format term_name row with bold (same as taxa_sheets)
+            # Format header row (term_name row)
             batch_requests.append({
                 "repeatCell": {
                     "range": {
@@ -128,30 +105,28 @@ def create_targeted_sheets(worksheets, sheet_names, full_temp_file_path, full_te
             })
             
             # Format requirement level cells with colors
-            if req_level_row is not None:
-                for col_idx, req_level in enumerate(data[req_level_row]):
-                    if req_level in color_styles and req_level in req_lev:
-                        color_obj = color_styles[req_level]
-                        if hasattr(color_obj, 'backgroundColor') and hasattr(color_obj.backgroundColor, 'red'):
-                            red = float(color_obj.backgroundColor.red)
-                            green = float(color_obj.backgroundColor.green)
-                            blue = float(color_obj.backgroundColor.blue)
-                            
+            for i, level in enumerate(sheet_df.iloc[req_level_row]):
+                if level in color_styles and level in req_lev:
+                    # Get color from the color_styles dictionary
+                    color_obj = color_styles[level]
+                    if hasattr(color_obj, 'backgroundColor'):
+                        # Extract RGB values from the color object
+                        if hasattr(color_obj.backgroundColor, 'red'):
                             batch_requests.append({
                                 "repeatCell": {
                                     "range": {
                                         "sheetId": worksheet.id,
                                         "startRowIndex": req_level_row,
                                         "endRowIndex": req_level_row + 1,
-                                        "startColumnIndex": col_idx,
-                                        "endColumnIndex": col_idx + 1
+                                        "startColumnIndex": i,
+                                        "endColumnIndex": i + 1
                                     },
                                     "cell": {
                                         "userEnteredFormat": {
                                             "backgroundColor": {
-                                                "red": red,
-                                                "green": green,
-                                                "blue": blue
+                                                "red": float(color_obj.backgroundColor.red),
+                                                "green": float(color_obj.backgroundColor.green),
+                                                "blue": float(color_obj.backgroundColor.blue)
                                             }
                                         }
                                     },
@@ -159,11 +134,15 @@ def create_targeted_sheets(worksheets, sheet_names, full_temp_file_path, full_te
                                 }
                             })
             
-            # Add dropdowns for vocabulary fields
-            for col_idx, term in enumerate(term_names):
+            # Get term names from the last row (these are column names)
+            term_names = sheet_df.iloc[term_name_row].tolist()
+            
+            # Add dropdowns and comments in batches
+            for i, term in enumerate(term_names):
                 if not term or pd.isna(term):
                     continue
                     
+                # Handle dropdowns
                 vocab_row = vocab_df[vocab_df['term_name'] == term]
                 if not vocab_row.empty and 'n_options' in vocab_row.columns:
                     n_options = int(vocab_row.iloc[0]['n_options'])
@@ -176,9 +155,9 @@ def create_targeted_sheets(worksheets, sheet_names, full_temp_file_path, full_te
                                 "range": {
                                     "sheetId": worksheet.id,
                                     "startRowIndex": term_name_row + 1,
-                                    "endRowIndex": term_name_row + 20,  # Add validation for several rows
-                                    "startColumnIndex": col_idx,
-                                    "endColumnIndex": col_idx + 1
+                                    "endRowIndex": term_name_row + 10,
+                                    "startColumnIndex": i,
+                                    "endColumnIndex": i + 1
                                 },
                                 "rule": {
                                     "condition": {
@@ -189,15 +168,12 @@ def create_targeted_sheets(worksheets, sheet_names, full_temp_file_path, full_te
                                 }
                             }
                         })
-            
-            # Add comments with field information
-            for col_idx, term in enumerate(term_names):
-                if not term or pd.isna(term):
-                    continue
                 
-                term_info = input_df[input_df['term_name'] == term]
+                # Handle comments
+                term_for_lookup = 'detected_notDetected' if term.startswith('detected_notDetected_') else term
+                term_info = input_df[input_df['term_name'] == term_for_lookup]
+                
                 if not term_info.empty:
-                    # Build comment text
                     comment = f"Requirement level: {term_info.iloc[0]['requirement_level']}"
                     if not pd.isna(term_info.iloc[0]['requirement_level_condition']):
                         comment += f" ({term_info.iloc[0]['requirement_level_condition']})"
@@ -216,29 +192,37 @@ def create_targeted_sheets(worksheets, sheet_names, full_temp_file_path, full_te
                                 "sheetId": worksheet.id,
                                 "startRowIndex": term_name_row,
                                 "endRowIndex": term_name_row + 1,
-                                "startColumnIndex": col_idx,
-                                "endColumnIndex": col_idx + 1
+                                "startColumnIndex": i,
+                                "endColumnIndex": i + 1
                             },
                             "rows": [{"values": [{"note": comment}]}],
                             "fields": "note"
                         }
                     })
             
-            # Apply all formatting in smaller batches to avoid quota limits
+            # Apply all formatting, dropdowns, and notes in one batch
             if batch_requests:
-                # Split requests into smaller batches
-                batch_size = 8
-                for i in range(0, len(batch_requests), batch_size):
-                    batch_chunk = batch_requests[i:i+batch_size]
-                    try:
-                        # Convert any NumPy types to Python native types
-                        batch_json = json.dumps({'requests': batch_chunk}, default=lambda x: int(x) if hasattr(x, 'dtype') else float(x) if isinstance(x, (np.float32, np.float64)) else str(x))
-                        batch_native = json.loads(batch_json)
-                        
-                        worksheet.spreadsheet.batch_update(batch_native)
-                        time.sleep(0.5)  # Short delay to avoid rate limits
-                    except Exception as e:
-                        print(f"Warning: Unexpected error in batch update: {str(e)}")
+                try:
+                    worksheet.spreadsheet.batch_update({'requests': batch_requests})
+                except gspread.exceptions.APIError as e:
+                    if "429" in str(e):  # Rate limit error
+                        print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
+                        time.sleep(60)  # Wait a full minute
+                        worksheet.spreadsheet.batch_update({'requests': batch_requests})
+                    else:
+                        raise
+            
+            # Add project_id and assay_name if columns exist
+            for col_idx, term in enumerate(term_names):
+                if term == 'projectID' and project_id:
+                    # Update the worksheet cell directly
+                    worksheet.update_cell(term_name_row + 2, col_idx + 1, project_id)
+                    print(f"Added project_id '{project_id}' to column {col_idx+1}")
+                
+                if term == 'assayName' and assay_name and len(assay_name) > 0:
+                    # Update the worksheet cell directly
+                    worksheet.update_cell(term_name_row + 2, col_idx + 1, assay_name[0])
+                    print(f"Added assay_name '{assay_name[0]}' to column {col_idx+1}")
             
             print(f"Successfully completed {sheet_name} sheet")
                 
