@@ -4,7 +4,7 @@ This project is actively under development. Reach out to bayden.willms@noaa.gov 
 
 FAIReSheets generates the FAIRe eDNA Data Template in Google Sheets. The FAIRe template is a collaborative effort in the eDNA research field to standardize its complicated data and metadata. FAIReSheets replicates the template creation from the [FAIRe-ator Repository](https://github.com/FAIR-eDNA/FAIRe-ator/tree/main) from Dr. Miwa Takahashi and Dr. Stephen Formel, except FAIReSheets outputs the template to Google Sheets rather than a Microsoft Excel spreadsheet. 
 
-TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, run FAIReSheets and follow the authentication workflow.
+TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml`, run FAIReSheets and follow the authentication workflow.
 
 ```bash
 python run.py 
@@ -66,7 +66,7 @@ GIST_URL=https://gist.githubusercontent.com/user/hash/raw/file.json
 
 ## Run
 
-Before running FAIReSheets, configure the `config.yaml` file given your desired parameters. These parameters determine the structure of your generated FAIRe template. You can also specify additional terms to add if you have relevant fields in your data that are not included in the FAIRe template.
+Before running FAIReSheets, configure the `config.yaml` file given your desired parameters. Please refer to the `config_TEMPLATE.yaml` for the available parameter options. These parameters determine the structure of your generated FAIRe template. You can also specify additional terms to add if you have relevant fields in your data that are not included in the FAIRe template. Just remember, `config_TEMPLATE.yaml` is just for you to know all the parameter options, and `config.yaml` is what the code actually uses.
 
 Run FAIReSheets from the root project directory using: 
 ```bash
