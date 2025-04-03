@@ -7,7 +7,7 @@ from datetime import datetime
 import gspread_formatting as gsf
 
 def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_type,
-                        project_id, assay_name, projectMetadata_user, sampleMetadata_user, color_styles, FAIRe_checklist_ver):
+                        project_id, assay_name, projectMetadata_user, sampleMetadata_user, experimentRunMetadata_user, color_styles, FAIRe_checklist_ver):
     """Create the README sheet with information about the template."""
 
     # Format ISO time like in R script
@@ -65,6 +65,9 @@ def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_
     
     if sampleMetadata_user:
         readme2.append([f'sampleMetadata_user = {" | ".join(sampleMetadata_user)}'])
+        
+    if experimentRunMetadata_user:
+        readme2.append([f'experimentRunMetadata_user = {" | ".join(experimentRunMetadata_user)}'])
     
     readme2.append([''])
     

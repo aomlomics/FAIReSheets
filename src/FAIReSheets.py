@@ -262,6 +262,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         assay_name=assay_name,
         projectMetadata_user=projectMetadata_user,
         sampleMetadata_user=sampleMetadata_user,
+        experimentRunMetadata_user=experimentRunMetadata_user,
         color_styles=color_styles,
         FAIRe_checklist_ver=FAIRe_checklist_ver
     )
