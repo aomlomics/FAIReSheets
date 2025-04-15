@@ -20,26 +20,46 @@ Before using FAIReSheets, you'll need to request access. This only needs to happ
 3. You'll receive an email with a Gist URL to add to your `.env` file and confirmation that you've been added to the user list.
 
 ### Installation
-This project works on both macOS and Windows. Ensure you have Git and either Anaconda or pip installed on your computer:
+This project requires Python and a few additional Python libraries. You have **two options** for installation - choose **either** the Anaconda method **OR** the pip method, not both:
 
-- [Download Git](https://git-scm.com/downloads)
-- [Install Anaconda](https://docs.anaconda.com/anaconda/install/) OR [Install pip](https://pip.pypa.io/en/stable/installation/) 
+#### Prerequisite for all users:
+First, install Git to download the project:
+- [Download and install Git](https://git-scm.com/downloads)
 
-#### Clone the GitHub project to your local machine:
+Then, download the project code:
 ```bash
 git clone https://github.com/baydenwillms/FAIReSheets.git
 cd FAIReSheets
 ```
 
-#### Option 1: Install with pip
-```bash
-pip install -r requirements.txt
-```
-#### Option 2: Configure Anaconda environment 
-```bash
-conda env create -f environment.yml 
-conda activate fairesheets
-```
+#### Option 1: Install with Anaconda (Recommended for simplified environment management)
+Anaconda is a scientific Python distribution that handles package dependencies and environment management automatically, it helps users avoid common installation issues:
+
+1. [Download and install Anaconda](https://docs.anaconda.com/anaconda/install/)
+2. Open Anaconda Prompt (Windows) or Terminal (Mac/Linux)
+3. Navigate to the FAIReSheets directory
+4. Create and activate the environment with all required packages:
+   ```bash
+   conda env create -f environment.yml 
+   conda activate fairesheets
+   ```
+
+#### Option 2: Install with pip
+If you prefer not to use Anaconda, you can use pip (Python's package installer):
+
+1. [Download and install Python](https://www.python.org/downloads/) 
+   - **IMPORTANT**: During installation, check the box that says "Add Python to PATH"
+   - This ensures Python and pip commands work from any directory. Pip will not work if Python is not added to PATH. If this is confusing, I suggest using Anaconda for the Python environment setup.
+2. Open Command Prompt (Windows) or Terminal (Mac/Linux) **OR** by using the terminal in your code editor
+3. Navigate to the FAIReSheets directory
+4. Install the required packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   If you see errors, try:
+   ```bash
+   python -m pip install -r requirements.txt
+   ```
 
 ### Google Sheet Setup
 1. Create a new, empty Google Sheet in your account
@@ -72,7 +92,9 @@ Run FAIReSheets from the root project directory using:
 ```bash
 python run.py
 ```
-Or alternatively you can run the `run.py` script in your IDE using the Play button. If you are missing things like a `.env` file, authentication credentials, or your spreadsheet ID to edit, the script will prompt you to add those, and/or create a sample `.env` file for you to edit. 
+Or alternatively you can run the `run.py` script in your IDE using the Play button. If you are missing things like a `.env` file, authentication credentials, or your spreadsheet ID to edit, the script will prompt you to add those, and/or create a sample `.env` file for you to edit.
+
+**Please note** that you must run this on your own computer, and **not** on a virtual machine or remote server. This code opens a login page in your web browser, where you sign in to your Google Drive account. If this code is run on a virtual machine, there is no available browser to open that login page.
 
 ## Run > Authentication
 
@@ -85,6 +107,8 @@ When you run FAIReSheets for the first time, the following will happen:
 5. Future runs won't require reauthentication
 
 If you see a message saying "Google hasn't verified this app", click "Advanced" and then "Go to FAIReSheets (unsafe)" to proceed. This is normal for specialized tools that haven't gone through Google's verification process.
+
+**Please note** that you must run this on your own computer, and **not** on a virtual machine or remote server. This code opens a login page in your web browser, where you sign in to your Google Drive account. If this code is run on a virtual machine, there is no available browser to open that login page.
 
 ## Optional (recommended)
 
