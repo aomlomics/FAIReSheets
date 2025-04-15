@@ -20,37 +20,63 @@ Before using FAIReSheets, you'll need to request access. This only needs to happ
 3. You'll receive an email with a Gist URL to add to your `.env` file and confirmation that you've been added to the user list.
 
 ### Installation
-This project requires Python and a few additional Python libraries. You have **two options** for installation - choose **either** the Anaconda method **OR** the pip method, not both:
+This project requires Python and a few additional Python libraries. We strongly recommend using the Anaconda method for installation as it handles dependencies automatically and avoids many common issues.
 
 #### Prerequisite for all users:
 First, install Git to download the project:
 - [Download and install Git](https://git-scm.com/downloads)
+  - During installation, select "Git from the command line and also from 3rd-party software"
+  - We recommend using the "bundled OpenSSH" option during installation
 
 Then, download the project code:
 ```bash
 git clone https://github.com/baydenwillms/FAIReSheets.git
 cd FAIReSheets
 ```
+Now, let's setup the Python dependencies using one of the two options.
 
-#### Option 1: Install with Anaconda (Recommended for simplified environment management)
-Anaconda is a scientific Python distribution that handles package dependencies and environment management automatically, it helps users avoid common installation issues:
+#### Option 1: Install with Anaconda **(HIGHLY RECOMMENDED)**
+Anaconda is a scientific Python distribution that handles package dependencies and environment management automatically, helping users avoid common installation issues:
 
 1. [Download and install Anaconda](https://docs.anaconda.com/anaconda/install/)
-2. Open Anaconda Prompt (Windows) or Terminal (Mac/Linux)
-3. Navigate to the FAIReSheets directory
-4. Create and activate the environment with all required packages:
-   ```bash
-   conda env create -f environment.yml 
-   conda activate fairesheets
-   ```
+   - **IMPORTANT**: During installation, check the box that says "Add Anaconda to PATH"
+   - This ensures Anaconda commands work from any directory
+   - If you don't check this box, you'll be limited to using only the Anaconda Prompt
 
-#### Option 2: Install with pip
+2. After installation, you have two options for running commands:
+
+   **Option A: Using Command Prompt (Windows)**
+   - Open Command Prompt (not PowerShell)
+   - Navigate to the FAIReSheets directory
+   - Run the following commands:
+     ```bash
+     conda init cmd.exe
+     ```
+   - **IMPORTANT**: Close and reopen Command Prompt after running conda init
+   - Then run:
+     ```bash
+     conda env create -f environment.yml 
+     conda activate fairesheets
+     ```
+
+   **Option B: Using Anaconda Prompt (Windows)**
+   - Open Anaconda Prompt
+   - Navigate to the FAIReSheets directory
+   - Run:
+     ```bash
+     conda env create -f environment.yml 
+     conda activate fairesheets
+     ```
+
+#### Option 2: Install with pip (Recommended for programmers / code savvy individuals)
 If you prefer not to use Anaconda, you can use pip (Python's package installer):
 
 1. [Download and install Python](https://www.python.org/downloads/) 
    - **IMPORTANT**: During installation, check the box that says "Add Python to PATH"
-   - This ensures Python and pip commands work from any directory. Pip will not work if Python is not added to PATH. If this is confusing, I suggest using Anaconda for the Python environment setup.
-2. Open Command Prompt (Windows) or Terminal (Mac/Linux) **OR** by using the terminal in your code editor
+   - This ensures Python and pip commands work from any directory
+   - Pip will not work if Python is not added to PATH
+
+2. Open Command Prompt (Windows) or Terminal (Mac/Linux)
 3. Navigate to the FAIReSheets directory
 4. Install the required packages:
    ```bash
@@ -94,7 +120,26 @@ python run.py
 ```
 Or alternatively you can run the `run.py` script in your IDE using the Play button. If you are missing things like a `.env` file, authentication credentials, or your spreadsheet ID to edit, the script will prompt you to add those, and/or create a sample `.env` file for you to edit.
 
-**Please note** that you must run this on your own computer, and **not** on a virtual machine or remote server. This code opens a login page in your web browser, where you sign in to your Google Drive account. If this code is run on a virtual machine, there is no available browser to open that login page.
+**Please note** that you must run this on your own computer, and **not** on a virtual machine or 
+remote server. This code opens a login page in your web browser, where you sign in to your Google 
+Drive account. If this code is run on a virtual machine, there is no available browser to open that 
+login page.
+
+### Creating a New Spreadsheet
+If you want to generate a new FAIRe template after you've already created one, you have two options:
+
+1. **Option 1: Restore the Google Sheet to blank**
+   - Open your Google Sheet
+   - Click on "File" > "Version history" > "See version history"
+   - Find the version from before you ran FAIReSheets (when the sheet was blank)
+   - Click on that version and select "Restore this version"
+   - Run FAIReSheets again with the same spreadsheet ID
+
+2. **Option 2: Create a new Google Sheet**
+   - Create a new, empty Google Sheet
+   - Copy the new Spreadsheet ID from the URL
+   - Update the `SPREADSHEET_ID` in your `.env` file with the new ID
+   - Run FAIReSheets again
 
 ## Run > Authentication
 
@@ -108,7 +153,41 @@ When you run FAIReSheets for the first time, the following will happen:
 
 If you see a message saying "Google hasn't verified this app", click "Advanced" and then "Go to FAIReSheets (unsafe)" to proceed. This is normal for specialized tools that haven't gone through Google's verification process.
 
-**Please note** that you must run this on your own computer, and **not** on a virtual machine or remote server. This code opens a login page in your web browser, where you sign in to your Google Drive account. If this code is run on a virtual machine, there is no available browser to open that login page.
+## Important Warnings
+
+### DO NOT Run on Virtual Machines or Remote Servers
+**IMPORTANT**: You must run this on your own computer, and **NOT** on a virtual machine or remote server. This code opens a login page in your web browser, where you sign in to your Google Drive account. If this code is run on a virtual machine, there is no available browser to open that login page.
+
+### Avoid Using MobaXterm or Similar Tools
+If you're using MobaXterm or similar tools that create virtual Linux environments:
+- These tools open in a fake Linux home directory (`/home/<username>`) that doesn't map to a real Windows folder
+- Instead, navigate to a real Windows path like `/drives/c/Users/<username>/Documents` before cloning
+- Avoid cloning into `/home/<username>` since it won't show up in File Explorer
+
+## Troubleshooting
+
+### Anaconda Issues
+- **Problem**: `conda` command not recognized in Command Prompt
+  - **Solution**: Make sure you checked "Add Anaconda to PATH" during installation
+  - If you didn't, reinstall Anaconda and check this option
+
+- **Problem**: `conda activate` fails with "conda init" message
+  - **Solution**: Run `conda init cmd.exe` in Command Prompt, then close and reopen Command Prompt
+
+- **Problem**: Python version mismatch (e.g., you installed Anaconda with Python 3.12 but environment.yml requires 3.9)
+  - **Solution**: This is okay! Conda will create an environment with Python 3.9 as specified in the environment.yml file
+
+### Git Issues
+- **Problem**: `git` command not recognized
+  - **Solution**: Make sure Git is installed system-wide from git-scm.com
+  - During installation, select "Git from the command line and also from 3rd-party software"
+  - I highly recommend using Visual Studio Code, it also has a UI for using git
+
+### Google Sheet Issues
+- **Problem**: Can't edit the Google Sheet
+  - **Solution**: Make sure you're using the Google account email you provided when requesting access, and that you checked the boxes to allow FAIReSheets to edit Google Sheets in your Google Drive.
+- **Problem**: Errors when running FAIReSheets
+  - **Solution**: Make sure the Google Sheet that FAIReSheets is editing is **empty**. You can use Google Drive's built in Restore History button before running FAIReSheets again, or, make a new Google Sheet and replace the Spreadsheet ID in the `.env` file. 
 
 ## Optional (recommended)
 
