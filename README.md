@@ -12,7 +12,7 @@ python run.py
 
 ## Setup
 
-### Access Request (Required)
+### Request Access (Required)
 Before using FAIReSheets, you'll need to request access. This only needs to happen once:
 
 1. Email bayden.willms@noaa.gov
@@ -87,6 +87,8 @@ If you prefer not to use Anaconda, you can use pip (Python's package installer):
    python -m pip install -r requirements.txt
    ```
 
+## Set Parameters
+
 ### Google Sheet Setup
 1. Create a new, empty Google Sheet in your account
 2. Copy the Spreadsheet ID from the URL:
@@ -109,6 +111,12 @@ The `.env` file should look like:
 SPREADSHEET_ID=your_spreadsheet_id_here
 GIST_URL=https://gist.githubusercontent.com/user/hash/raw/file.json
 ```
+The GIST_URL will be sent to you when you've been granted access to FAIReSheets (see first section).
+
+### Set Parameters in config.yaml
+Edit the `config.yaml` file to set your run parameters. Here you can specify things like project name, assays used, metabarcoding vs targeted approach, etc. 
+
+Refer to the `config_TEMPLATE.yaml` for information on all the available options for input parameters. Just remember, `config.yaml` is the file actually used by the code.
 
 ## Run
 
