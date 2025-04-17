@@ -12,10 +12,10 @@ import gspread
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 
-from src.helpers.FAIRe2NODE_helpers import (
+from helpers.FAIRe2NODE_helpers import (
     get_bioinformatics_fields,
     remove_bioinfo_fields_from_project_metadata,
-    remove_bioinfo_fields_from_experiment_metadata
+    remove_bioinfo_fields_from_experiment_metadata,
 )
 
 def FAIRe2NODE(client=None):
@@ -43,7 +43,7 @@ def FAIRe2NODE(client=None):
     spreadsheet = client.open_by_key(spreadsheet_id)
     
     # Load NOAA config
-    config_path = os.path.join('FAIReSheets', 'NOAA_config.yaml')
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'NOAA_config.yaml')
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
@@ -51,7 +51,7 @@ def FAIRe2NODE(client=None):
         raise Exception(f"Error reading NOAA config file: {e}")
     
     # Get NOAA checklist path
-    noaa_checklist_path = os.path.join('input', 'FAIRe_NOAA_checklist.xlsx')
+    noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'input', 'FAIRe_NOAA_checklist_v1.0.xlsx')
     if not os.path.exists(noaa_checklist_path):
         raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
     
@@ -78,3 +78,19 @@ def FAIRe2NODE(client=None):
     remove_bioinfo_fields_from_experiment_metadata(experiment_metadata, bioinfo_fields)
     
     print("Part 1 completed successfully!")
+
+# Add this code to execute the function when the script is run directly
+if __name__ == "__main__":
+    from auth import authenticate
+    
+    print("Starting FAIRe2NODE...")
+    try:
+        # Authenticate with Google
+        client = authenticate()
+        
+        # Run the conversion
+        FAIRe2NODE(client=client)
+        
+        print("FAIRe2NODE completed successfully!")
+    except Exception as e:
+        print(f"Error: {e}")

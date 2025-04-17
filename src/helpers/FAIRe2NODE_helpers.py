@@ -6,6 +6,7 @@ These functions support the conversion of FAIReSheets templates to NODE format.
 import pandas as pd
 import gspread
 import time
+import os
 
 def get_bioinformatics_fields(noaa_checklist_path):
     """
@@ -21,8 +22,8 @@ def get_bioinformatics_fields(noaa_checklist_path):
         # Read the checklist sheet
         input_df = pd.read_excel(noaa_checklist_path, sheet_name='checklist')
         
-        # Get all fields where Section is 'Bioinformatics'
-        bioinfo_fields = input_df[input_df['Section'] == 'Bioinformatics']['term_name'].tolist()
+        # Get all fields where section is 'Bioinformatics' (lowercase column name)
+        bioinfo_fields = input_df[input_df['section'] == 'Bioinformatics']['term_name'].tolist()
         
         return bioinfo_fields
     except Exception as e:
@@ -44,8 +45,21 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
             
         # Find the term_name column index
         headers = data[0]
+        print(f"Headers in projectMetadata sheet: {headers}")  # Debug
+        
         term_name_col = headers.index('term_name')
         
+        # Find the project_level column index (this is where dropdowns go)
+        project_level_col = None
+        for i, header in enumerate(headers):
+            if header == 'project_level':
+                project_level_col = i
+                break
+                
+        if project_level_col is None:
+            print("Warning: Could not find 'project_level' column in projectMetadata sheet")
+            return
+            
         # Find rows to delete (1-based indexing for worksheet operations)
         rows_to_delete = []
         for i, row in enumerate(data[1:], start=2):  # Start from 2 to skip header
@@ -79,6 +93,68 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                     print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
                     time.sleep(60)
                     worksheet.spreadsheet.batch_update({'requests': batch_requests})
+                else:
+                    raise
+        
+        # Now we need to restore the dropdowns
+        # First, get the updated data after deletion
+        updated_data = worksheet.get_all_values()
+        
+        # Use the NOAA checklist for vocabulary data
+        import os
+        import pandas as pd
+        
+        noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                                         'input', 'FAIRe_NOAA_checklist_v1.0.xlsx')
+        
+        # Read the checklist sheet
+        checklist_df = pd.read_excel(noaa_checklist_path, sheet_name='checklist')
+        
+        # Prepare batch validation requests
+        validation_requests = []
+        
+        # For each row in the updated sheet
+        for i, row in enumerate(updated_data[1:], start=2):  # Skip header row
+            term_name = row[term_name_col]
+            
+            # Find this term in the checklist dataframe
+            term_row = checklist_df[checklist_df['term_name'] == term_name]
+            if not term_row.empty and 'controlled_vocabulary_options' in term_row.columns:
+                vocab_str = term_row.iloc[0]['controlled_vocabulary_options']
+                if pd.notna(vocab_str) and vocab_str:
+                    # Split the controlled vocabulary string by pipe character
+                    values = [v.strip() for v in str(vocab_str).split('|')]
+                    
+                    if values:
+                        # Add data validation for this cell
+                        validation_requests.append({
+                            "setDataValidation": {
+                                "range": {
+                                    "sheetId": worksheet.id,
+                                    "startRowIndex": i - 1,  # 0-based
+                                    "endRowIndex": i,
+                                    "startColumnIndex": project_level_col,
+                                    "endColumnIndex": project_level_col + 1
+                                },
+                                "rule": {
+                                    "condition": {
+                                        "type": "ONE_OF_LIST",
+                                        "values": [{"userEnteredValue": v} for v in values]
+                                    },
+                                    "showCustomUi": True
+                                }
+                            }
+                        })
+        
+        # Execute batch validation update
+        if validation_requests:
+            try:
+                worksheet.spreadsheet.batch_update({"requests": validation_requests})
+            except gspread.exceptions.APIError as e:
+                if "429" in str(e):  # Rate limit error
+                    print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
+                    time.sleep(60)
+                    worksheet.spreadsheet.batch_update({"requests": validation_requests})
                 else:
                     raise
                     
