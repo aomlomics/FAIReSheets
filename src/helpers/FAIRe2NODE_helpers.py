@@ -877,3 +877,23 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
         
     except Exception as e:
         raise Exception(f"Error adding NOAA fields to sampleMetadata: {e}")
+
+def remove_taxa_sheets(spreadsheet):
+    """
+    Remove taxaRaw and taxaFinal sheets from the spreadsheet.
+    
+    Args:
+        spreadsheet (gspread.Spreadsheet): The Google Spreadsheet object
+    """
+    try:
+        # Get the worksheets
+        taxa_raw = spreadsheet.worksheet("taxaRaw")
+        taxa_final = spreadsheet.worksheet("taxaFinal")
+        
+        # Delete the worksheets
+        spreadsheet.del_worksheet(taxa_raw)
+        spreadsheet.del_worksheet(taxa_final)
+        
+        print("Successfully removed taxaRaw and taxaFinal sheets")
+    except Exception as e:
+        raise Exception(f"Error removing taxa sheets: {e}")

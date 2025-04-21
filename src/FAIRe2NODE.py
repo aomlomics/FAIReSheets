@@ -22,6 +22,7 @@ from helpers.FAIRe2NODE_helpers import (
     add_noaa_fields_to_project_metadata,
     add_noaa_fields_to_experiment_metadata,
     add_noaa_fields_to_sample_metadata,
+    remove_taxa_sheets,
 )
 
 def FAIRe2NODE(client=None):
@@ -122,6 +123,11 @@ def FAIRe2NODE(client=None):
     add_noaa_fields_to_experiment_metadata(experiment_metadata, noaa_experiment_fields)
     
     print("Part 2 completed successfully!")
+    
+    # Part 3: Remove taxa sheets
+    print("\nPart 3: Removing taxa sheets...")
+    remove_taxa_sheets(spreadsheet)
+    print("Part 3 completed successfully!")
 
 # Add this code to execute the function when the script is run directly
 if __name__ == "__main__":
