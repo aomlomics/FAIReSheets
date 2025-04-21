@@ -9,6 +9,8 @@ fields as needed.
 import os
 import yaml
 import gspread
+import gspread_formatting as gsf
+import pandas as pd
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 
@@ -16,6 +18,10 @@ from helpers.FAIRe2NODE_helpers import (
     get_bioinformatics_fields,
     remove_bioinfo_fields_from_project_metadata,
     remove_bioinfo_fields_from_experiment_metadata,
+    get_noaa_fields,
+    add_noaa_fields_to_project_metadata,
+    add_noaa_fields_to_experiment_metadata,
+    add_noaa_fields_to_sample_metadata,
 )
 
 def FAIRe2NODE(client=None):
@@ -66,6 +72,7 @@ def FAIRe2NODE(client=None):
     try:
         project_metadata = spreadsheet.worksheet("projectMetadata")
         experiment_metadata = spreadsheet.worksheet("experimentRunMetadata")
+        sample_metadata = spreadsheet.worksheet("sampleMetadata")
     except gspread.exceptions.WorksheetNotFound as e:
         raise Exception(f"Required worksheet not found: {e}")
     
@@ -78,6 +85,43 @@ def FAIRe2NODE(client=None):
     remove_bioinfo_fields_from_experiment_metadata(experiment_metadata, bioinfo_fields)
     
     print("Part 1 completed successfully!")
+    
+    # Part 2: Add NOAA fields to sheets
+    print("\nPart 2: Adding NOAA fields to sheets...")
+    
+    # Define color styles for requirement levels - matching FAIReSheets exactly
+    req_col_df = pd.DataFrame({
+        'requirement_level': ["M = Mandatory", "HR = Highly recommended", "R = Recommended", "O = Optional"],
+        'requirement_level_code': ["M", "HR", "R", "O"],
+        'col': ["#E26B0A", "#FFCC00", "#FFFF99", "#CCFF99"]
+    })
+    
+    # Create color styles dictionary
+    color_styles = {}
+    for _, row in req_col_df.iterrows():
+        color_styles[row['requirement_level_code']] = gsf.CellFormat(
+            backgroundColor=gsf.Color.fromHex(row['col'])
+        )
+    
+    # Add NOAA project metadata fields
+    print("Adding NOAA project metadata fields...")
+    noaa_project_fields = get_noaa_fields(noaa_checklist_path, "NOAAprojectMetadata")
+    print(f"Found {len(noaa_project_fields)} NOAA project metadata fields to add")
+    add_noaa_fields_to_project_metadata(project_metadata, noaa_project_fields)
+    
+    # Add NOAA sample metadata fields
+    print("Adding NOAA sample metadata fields...")
+    noaa_sample_fields = get_noaa_fields(noaa_checklist_path, "NOAAsampleMetadata")
+    print(f"Found {len(noaa_sample_fields)} NOAA sample metadata fields to add")
+    add_noaa_fields_to_sample_metadata(sample_metadata, noaa_sample_fields)
+    
+    # Add NOAA experiment run metadata fields
+    print("Adding NOAA experiment run metadata fields...")
+    noaa_experiment_fields = get_noaa_fields(noaa_checklist_path, "NOAAexperimentRunMetadata")
+    print(f"Found {len(noaa_experiment_fields)} NOAA experiment run metadata fields to add")
+    add_noaa_fields_to_experiment_metadata(experiment_metadata, noaa_experiment_fields)
+    
+    print("Part 2 completed successfully!")
 
 # Add this code to execute the function when the script is run directly
 if __name__ == "__main__":
