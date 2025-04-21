@@ -68,11 +68,7 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
             if row[term_name_col] in bioinfo_fields:
                 rows_to_delete.append(i)
         
-        if not rows_to_delete:
-            return
-            
-        # Prepare batch delete request
-        # Note: We need to delete from bottom to top to maintain correct indices
+        # Prepare batch delete request for rows
         batch_requests = []
         for row_idx in sorted(rows_to_delete, reverse=True):
             batch_requests.append({
@@ -85,6 +81,21 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                     }
                 }
             })
+        
+        # Add request to delete columns after column D (project_level)
+        if project_level_col is not None and project_level_col + 1 < len(headers):
+            # Delete all columns after project_level column
+            batch_requests.append({
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": project_level_col + 1,  # Start after project_level column
+                        "endIndex": len(headers)  # Delete all remaining columns
+                    }
+                }
+            })
+            print(f"Removing columns {project_level_col + 1} to {len(headers)} from projectMetadata sheet")
         
         # Execute batch delete
         if batch_requests:
