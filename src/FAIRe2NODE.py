@@ -23,6 +23,7 @@ from helpers.FAIRe2NODE_helpers import (
     add_noaa_fields_to_experiment_metadata,
     add_noaa_fields_to_sample_metadata,
     remove_taxa_sheets,
+    create_analysis_metadata_sheets,
 )
 
 def FAIRe2NODE(client=None):
@@ -128,6 +129,12 @@ def FAIRe2NODE(client=None):
     print("\nPart 3: Removing taxa sheets...")
     remove_taxa_sheets(spreadsheet)
     print("Part 3 completed successfully!")
+    
+    # Part 4: Create analysisMetadata sheets
+    print("\nPart 4: Creating analysisMetadata sheets...")
+    analysis_worksheets = create_analysis_metadata_sheets(spreadsheet, config)
+    print(f"Created {len(analysis_worksheets)} analysisMetadata sheet(s)")
+    print("Part 4 completed successfully!")
 
 # Add this code to execute the function when the script is run directly
 if __name__ == "__main__":

@@ -908,3 +908,73 @@ def remove_taxa_sheets(spreadsheet):
         print("Successfully removed taxaRaw and taxaFinal sheets")
     except Exception as e:
         raise Exception(f"Error removing taxa sheets: {e}")
+
+def create_analysis_metadata_sheets(spreadsheet, config):
+    """
+    Create analysisMetadata Google Sheets for each analysis run name in the config.
+    
+    This function creates a new Google Sheet named 'analysisMetadata_<analysis_run_name>'
+    for each analysis run name specified in the NOAA_config.yaml file. If no analysis
+    run names are provided, it creates a single generic 'analysisMetadata' sheet.
+    
+    Args:
+        spreadsheet (gspread.Spreadsheet): The Google Spreadsheet object
+        config (dict): Configuration loaded from NOAA_config.yaml
+        
+    Returns:
+        dict: Dictionary mapping analysis run names to their worksheet objects
+        
+    Raises:
+        Exception: If there's an error creating the sheets
+    """
+    try:
+        # Get project_id from config
+        project_id = config.get('project_id')
+        if not project_id:
+            raise ValueError("project_id not found in NOAA_config.yaml")
+        
+        # Get analysis run names from config
+        analysis_runs = config.get('analysis_run_name', {})
+        
+        # Dictionary to store created worksheets
+        analysis_worksheets = {}
+        
+        # If no analysis runs are specified, create a single generic analysisMetadata sheet
+        if not analysis_runs:
+            print("No analysis run names specified in config. Creating a single analysisMetadata sheet...")
+            sheet_name = "analysisMetadata"
+            try:
+                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
+                analysis_worksheets[sheet_name] = worksheet
+                print(f"Created {sheet_name} sheet")
+            except gspread.exceptions.APIError as e:
+                if "429" in str(e):  # Rate limit error
+                    print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
+                    time.sleep(60)
+                    worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
+                    analysis_worksheets[sheet_name] = worksheet
+                    print(f"Created {sheet_name} sheet")
+                else:
+                    raise
+        else:
+            # Create a sheet for each analysis run name
+            for analysis_run_name in analysis_runs:
+                sheet_name = f"analysisMetadata_{analysis_run_name}"
+                try:
+                    worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
+                    analysis_worksheets[analysis_run_name] = worksheet
+                    print(f"Created {sheet_name} sheet")
+                except gspread.exceptions.APIError as e:
+                    if "429" in str(e):  # Rate limit error
+                        print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
+                        time.sleep(60)
+                        worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
+                        analysis_worksheets[analysis_run_name] = worksheet
+                        print(f"Created {sheet_name} sheet")
+                    else:
+                        raise
+        
+        return analysis_worksheets
+    
+    except Exception as e:
+        raise Exception(f"Error creating analysis metadata sheets: {e}")
