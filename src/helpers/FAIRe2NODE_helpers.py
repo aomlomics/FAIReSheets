@@ -942,7 +942,7 @@ def create_analysis_metadata_sheets(spreadsheet, config):
         # If no analysis runs are specified, create a single generic analysisMetadata sheet
         if not analysis_runs:
             print("No analysis run names specified in config. Creating a single analysisMetadata sheet...")
-            sheet_name = "analysisMetadata"
+            sheet_name = "analysisMetadata_<analysis_run_name>"
             try:
                 worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
                 analysis_worksheets[sheet_name] = worksheet
