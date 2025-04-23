@@ -24,6 +24,7 @@ from helpers.FAIRe2NODE_helpers import (
     add_noaa_fields_to_sample_metadata,
     remove_taxa_sheets,
     create_analysis_metadata_sheets,
+    add_noaa_fields_to_analysis_metadata,
 )
 
 def FAIRe2NODE(client=None):
@@ -135,6 +136,20 @@ def FAIRe2NODE(client=None):
     analysis_worksheets = create_analysis_metadata_sheets(spreadsheet, config)
     print(f"Created {len(analysis_worksheets)} analysisMetadata sheet(s)")
     print("Part 4 completed successfully!")
+    
+    # Part 5: Add NOAA analysis metadata fields to analysisMetadata sheets
+    print("\nPart 5: Adding NOAA analysis metadata fields to analysisMetadata sheets...")
+    
+    # Get NOAA analysis metadata fields
+    noaa_analysis_fields = get_noaa_fields(noaa_checklist_path, "NOAAanalysisMetadata")
+    print(f"Found {len(noaa_analysis_fields)} NOAA analysis metadata fields to add")
+    
+    # Add NOAA analysis metadata fields to each analysisMetadata sheet
+    for analysis_run_name, worksheet in analysis_worksheets.items():
+        print(f"Adding NOAA analysis metadata fields to {worksheet.title}...")
+        add_noaa_fields_to_analysis_metadata(worksheet, noaa_analysis_fields, config, analysis_run_name)
+    
+    print("Part 5 completed successfully!")
 
 # Add this code to execute the function when the script is run directly
 if __name__ == "__main__":

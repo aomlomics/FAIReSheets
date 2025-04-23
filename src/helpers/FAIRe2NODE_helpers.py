@@ -978,3 +978,194 @@ def create_analysis_metadata_sheets(spreadsheet, config):
     
     except Exception as e:
         raise Exception(f"Error creating analysis metadata sheets: {e}")
+
+def add_noaa_fields_to_analysis_metadata(worksheet, noaa_fields, config, analysis_run_name=None):
+    """
+    Add NOAA fields to analysisMetadata sheet and auto-fill values from config.
+    
+    Args:
+        worksheet (gspread.Worksheet): The analysisMetadata worksheet
+        noaa_fields (pandas.DataFrame): DataFrame containing NOAA fields to add
+        config (dict): Configuration loaded from NOAA_config.yaml
+        analysis_run_name (str, optional): Specific analysis run name for this sheet
+    """
+    try:
+        import pandas as pd
+        import gspread
+        import gspread_formatting as gsf
+        import numpy as np
+        import time
+        
+        # Replace NaN values with empty strings
+        noaa_fields = noaa_fields.fillna('')
+        
+        # Initialize with required headers
+        headers = ['requirement_level_code', 'section', 'term_name', 'values']
+        worksheet.update('A1', [headers])
+        
+        # Prepare rows to add
+        rows = []
+        for _, field in noaa_fields.iterrows():
+            row = {
+                'requirement_level_code': field['requirement_level_code'],
+                'section': field['section'],
+                'term_name': field['term_name'],
+                'values': ''  # Will be filled for auto-fill fields
+            }
+            
+            # Auto-fill values from config for specific fields
+            term_name = field['term_name']
+            if term_name == 'project_id':
+                row['values'] = config['project_id']
+            elif term_name == 'analysis_run_name' and analysis_run_name:
+                row['values'] = analysis_run_name
+            elif term_name == 'assay_name' and analysis_run_name:
+                row['values'] = config['analysis_run_name'][analysis_run_name]['assay_name']
+                
+            rows.append(row)
+        
+        # Convert to DataFrame for easier handling
+        df = pd.DataFrame(rows)
+        
+        # Update worksheet with all data
+        worksheet.resize(rows=len(rows) + 10, cols=len(headers) + 5)  # Add buffer
+        worksheet.update('A2', df.values.tolist())
+        
+        # Prepare a single batch request for all formatting
+        batch_requests = []
+        
+        # 1. Add header formatting
+        batch_requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": worksheet.id,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": len(headers)
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "textFormat": {
+                            "bold": True
+                        }
+                    }
+                },
+                "fields": "userEnteredFormat.textFormat.bold"
+            }
+        })
+        
+        # Define color styles for requirement levels
+        color_styles = {
+            "M": {"red": 0.89, "green": 0.42, "blue": 0.04},  # #E26B0A - Orange
+            "HR": {"red": 1.0, "green": 0.8, "blue": 0.0},    # #FFCC00 - Yellow
+            "R": {"red": 1.0, "green": 1.0, "blue": 0.6},     # #FFFF99 - Light yellow
+            "O": {"red": 0.8, "green": 1.0, "blue": 0.6}      # #CCFF99 - Light green
+        }
+        
+        # 2. Add formatting for each row
+        for i, row in enumerate(rows, start=2):  # Start from row 2 (after headers)
+            req_level = row['requirement_level_code']
+            
+            # Add requirement level color formatting
+            if req_level in color_styles:
+                batch_requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": worksheet.id,
+                            "startRowIndex": i-1,
+                            "endRowIndex": i,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 1
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": color_styles[req_level]
+                            }
+                        },
+                        "fields": "userEnteredFormat.backgroundColor"
+                    }
+                })
+            
+            # Add term name bold formatting
+            batch_requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "startRowIndex": i-1,
+                        "endRowIndex": i,
+                        "startColumnIndex": 2,  # term_name column
+                        "endColumnIndex": 3
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat.bold"
+                }
+            })
+            
+            # Add description notes
+            description = noaa_fields[noaa_fields['term_name'] == row['term_name']]['description'].iloc[0]
+            if description:
+                batch_requests.append({
+                    "updateCells": {
+                        "range": {
+                            "sheetId": worksheet.id,
+                            "startRowIndex": i-1,
+                            "endRowIndex": i,
+                            "startColumnIndex": 2,
+                            "endColumnIndex": 3
+                        },
+                        "rows": [{
+                            "values": [{
+                                "note": description
+                            }]
+                        }],
+                        "fields": "note"
+                    }
+                })
+            
+            # Add controlled vocabulary dropdowns
+            cv_options = noaa_fields[noaa_fields['term_name'] == row['term_name']]['controlled_vocabulary_options'].iloc[0]
+            if pd.notna(cv_options) and cv_options:
+                values = [v.strip() for v in str(cv_options).split('|') if v.strip()]
+                if values:
+                    batch_requests.append({
+                        "setDataValidation": {
+                            "range": {
+                                "sheetId": worksheet.id,
+                                "startRowIndex": i-1,
+                                "endRowIndex": i,
+                                "startColumnIndex": 3,  # values column
+                                "endColumnIndex": 4
+                            },
+                            "rule": {
+                                "condition": {
+                                    "type": "ONE_OF_LIST",
+                                    "values": [{"userEnteredValue": v} for v in values]
+                                },
+                                "showCustomUi": True,
+                                "strict": False
+                            }
+                        }
+                    })
+        
+        # Execute all formatting in a single batch request
+        try:
+            worksheet.spreadsheet.batch_update({"requests": batch_requests})
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e):  # Rate limit error
+                print(f"Warning: Hit API rate limit while formatting {worksheet.title}. Waiting 60 seconds before retrying...")
+                time.sleep(60)
+                worksheet.spreadsheet.batch_update({"requests": batch_requests})
+            else:
+                raise
+        
+        print(f"Added {len(rows)} NOAA fields to {worksheet.title} with formatting and auto-filled values")
+        
+    except Exception as e:
+        raise Exception(f"Error adding NOAA fields to analysisMetadata: {e}")
