@@ -9,6 +9,7 @@ import time
 import os
 import numpy as np
 import gspread_formatting as gsf
+import webbrowser
 
 def get_bioinformatics_fields(noaa_checklist_path):
     """
@@ -47,7 +48,6 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
             
         # Find the term_name column index
         headers = data[0]
-        print(f"Headers in projectMetadata sheet: {headers}")  # Debug
         
         term_name_col = headers.index('term_name')
         
@@ -59,7 +59,6 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                 break
                 
         if project_level_col is None:
-            print("Warning: Could not find 'project_level' column in projectMetadata sheet")
             return
             
         # Find rows to delete (1-based indexing for worksheet operations)
@@ -95,7 +94,6 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                     }
                 }
             })
-            print(f"Removing columns {project_level_col + 1} to {len(headers)} from projectMetadata sheet")
         
         # Execute batch delete
         if batch_requests:
@@ -103,7 +101,6 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                 worksheet.spreadsheet.batch_update({'requests': batch_requests})
             except gspread.exceptions.APIError as e:
                 if "429" in str(e):  # Rate limit error
-                    print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
                     time.sleep(60)
                     worksheet.spreadsheet.batch_update({'requests': batch_requests})
                 else:
@@ -165,14 +162,12 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                 worksheet.spreadsheet.batch_update({"requests": validation_requests})
             except gspread.exceptions.APIError as e:
                 if "429" in str(e):  # Rate limit error
-                    print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
                     time.sleep(60)
                     worksheet.spreadsheet.batch_update({"requests": validation_requests})
                 else:
                     raise
         
         # Remove the last 5 rows from the projectMetadata sheet
-        print("Removing the last 5 rows from projectMetadata sheet...")
         # Get the current row count after previous operations
         current_data = worksheet.get_all_values()
         total_rows = len(current_data)
@@ -181,9 +176,6 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
             # Try direct row deletion instead of batch update
             start_row = total_rows - 4  # 1-based indexing for delete_rows
             worksheet.delete_rows(start_row, total_rows)
-            print(f"Successfully removed the last 5 rows from projectMetadata sheet")
-        else:
-            print(f"Warning: Cannot remove 5 rows as the sheet only has {total_rows} rows")
                     
     except Exception as e:
         raise Exception(f"Error removing bioinformatics fields from projectMetadata: {e}")
@@ -232,7 +224,6 @@ def remove_bioinfo_fields_from_experiment_metadata(worksheet, bioinfo_fields):
                 worksheet.spreadsheet.batch_update({'requests': batch_requests})
             except gspread.exceptions.APIError as e:
                 if "429" in str(e):  # Rate limit error
-                    print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
                     time.sleep(60)
                     worksheet.spreadsheet.batch_update({'requests': batch_requests})
                 else:
@@ -467,8 +458,6 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
         if validation_requests:
             worksheet.spreadsheet.batch_update({"requests": validation_requests})
         
-        print(f"Added {len(new_rows)} NOAA fields to projectMetadata sheet with formatting")
-        
     except Exception as e:
         raise Exception(f"Error adding NOAA fields to projectMetadata: {e}")
 
@@ -677,8 +666,6 @@ def add_noaa_fields_to_experiment_metadata(worksheet, noaa_fields):
         if validation_requests:
             worksheet.spreadsheet.batch_update({"requests": validation_requests})
         
-        print(f"Added {len(new_cols)} NOAA fields to experimentRunMetadata sheet with formatting")
-        
     except Exception as e:
         raise Exception(f"Error adding NOAA fields to experimentRunMetadata: {e}")
 
@@ -884,8 +871,6 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
         if validation_requests:
             worksheet.spreadsheet.batch_update({"requests": validation_requests})
         
-        print(f"Added {len(new_cols)} NOAA fields to sampleMetadata sheet with formatting")
-        
     except Exception as e:
         raise Exception(f"Error adding NOAA fields to sampleMetadata: {e}")
 
@@ -905,7 +890,6 @@ def remove_taxa_sheets(spreadsheet):
         spreadsheet.del_worksheet(taxa_raw)
         spreadsheet.del_worksheet(taxa_final)
         
-        print("Successfully removed taxaRaw and taxaFinal sheets")
     except Exception as e:
         raise Exception(f"Error removing taxa sheets: {e}")
 
@@ -941,19 +925,15 @@ def create_analysis_metadata_sheets(spreadsheet, config):
         
         # If no analysis runs are specified, create a single generic analysisMetadata sheet
         if not analysis_runs:
-            print("No analysis run names specified in config. Creating a single analysisMetadata sheet...")
             sheet_name = "analysisMetadata_<analysis_run_name>"
             try:
                 worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
                 analysis_worksheets[sheet_name] = worksheet
-                print(f"Created {sheet_name} sheet")
             except gspread.exceptions.APIError as e:
                 if "429" in str(e):  # Rate limit error
-                    print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
                     time.sleep(60)
                     worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
                     analysis_worksheets[sheet_name] = worksheet
-                    print(f"Created {sheet_name} sheet")
                 else:
                     raise
         else:
@@ -963,14 +943,11 @@ def create_analysis_metadata_sheets(spreadsheet, config):
                 try:
                     worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
                     analysis_worksheets[analysis_run_name] = worksheet
-                    print(f"Created {sheet_name} sheet")
                 except gspread.exceptions.APIError as e:
                     if "429" in str(e):  # Rate limit error
-                        print("Warning: Hit API rate limit. Waiting 60 seconds before retrying...")
                         time.sleep(60)
                         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
                         analysis_worksheets[analysis_run_name] = worksheet
-                        print(f"Created {sheet_name} sheet")
                     else:
                         raise
         
@@ -1159,13 +1136,125 @@ def add_noaa_fields_to_analysis_metadata(worksheet, noaa_fields, config, analysi
             worksheet.spreadsheet.batch_update({"requests": batch_requests})
         except gspread.exceptions.APIError as e:
             if "429" in str(e):  # Rate limit error
-                print(f"Warning: Hit API rate limit while formatting {worksheet.title}. Waiting 60 seconds before retrying...")
                 time.sleep(60)
                 worksheet.spreadsheet.batch_update({"requests": batch_requests})
             else:
                 raise
         
-        print(f"Added {len(rows)} NOAA fields to {worksheet.title} with formatting and auto-filled values")
-        
     except Exception as e:
         raise Exception(f"Error adding NOAA fields to analysisMetadata: {e}")
+    
+def update_readme_sheet_for_FAIRe2NODE(spreadsheet, config):
+    """
+    Update the README sheet to reflect the FAIRe2NODE structure.
+    
+    Args:
+        spreadsheet (gspread.Spreadsheet): The Google Spreadsheet object
+        config (dict): Configuration loaded from NOAA_config.yaml
+        
+    Returns:
+        None
+        
+    Raises:
+        Exception: If there's an error updating the README sheet
+    """
+    try:
+        # Get the README worksheet
+        readme_sheet = spreadsheet.worksheet("README")
+        
+        # Get all worksheet names except README and Drop-down values
+        sheet_names = [ws.title for ws in spreadsheet.worksheets() 
+                      if ws.title not in ["README", "Drop-down values"]]
+        
+        # Create rows for each sheet (empty timestamp and email cells)
+        readme_timestamp_rows = [[name, '', ''] for name in sheet_names]
+        
+        # Add an empty row at the end
+        readme_timestamp_rows.append(['', '', ''])
+        
+        # Update the Modification Timestamp section
+        # First, find where the timestamp section starts
+        all_values = readme_sheet.get_all_values()
+        timestamp_section_start = None
+        for i, row in enumerate(all_values):
+            if row and row[0] == 'Modification Timestamp:':
+                timestamp_section_start = i
+                break
+        
+        if timestamp_section_start is not None:
+            # Create the new timestamp section
+            timestamp_section = [
+                ['Modification Timestamp:'],
+                ['Sheet Name', 'Timestamp', 'Email']
+            ] + readme_timestamp_rows
+            
+            # Prepare batch requests for both updating content and formatting
+            batch_requests = []
+            
+            # 1. Update the timestamp section content
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": timestamp_section_start,
+                        "endRowIndex": timestamp_section_start + len(timestamp_section),
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 3
+                    },
+                    "rows": [{"values": [{"userEnteredValue": {"stringValue": cell}} for cell in row]} for row in timestamp_section],
+                    "fields": "userEnteredValue"
+                }
+            })
+            
+            # 2. Format the header row (bold)
+            batch_requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": timestamp_section_start + 1,
+                        "endRowIndex": timestamp_section_start + 2,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 3
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat.bold"
+                }
+            })
+            
+            # Execute batch requests with rate limit handling
+            try:
+                spreadsheet.batch_update({"requests": batch_requests})
+            except gspread.exceptions.APIError as e:
+                if "429" in str(e):  # Rate limit error
+                    time.sleep(60)
+                    spreadsheet.batch_update({"requests": batch_requests})
+                else:
+                    raise
+            
+    except Exception as e:
+        raise Exception(f"Error updating README sheet for FAIRe2NODE: {e}")
+
+def show_next_steps_page():
+    """
+    Opens the next steps page in the default web browser.
+    This page shows what to do after successful FAIRe2NODE conversion.
+    """
+    try:
+        # Get the absolute path to the next_steps.html file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        next_steps_path = os.path.join(current_dir, 'next_steps.html')
+        
+        # Convert the file path to a file URL
+        file_url = 'file:///' + next_steps_path.replace('\\', '/')
+        
+        # Open the page in the default browser
+        webbrowser.open(file_url)
+        
+    except Exception as e:
+        print(f"Warning: Could not open next steps page: {e}")

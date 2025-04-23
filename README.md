@@ -120,21 +120,19 @@ To automatically track modifications in your Google Sheet, you can use the follo
 2. Click on `Extensions` in the menu, then select `Apps Script`.
 3. Delete any code in the script editor and copy-paste the following code:
 
-    ```javascript
-    function onEdit(e) {
-      var sheet = e.source.getActiveSheet();
-      var sheetName = sheet.getName();
-      
-      // Skip README and Drop-down values sheets
-      if (sheetName === "README" || sheetName === "Drop-down values") {
-        return;
-      }
-      
-      var readmeSheet = e.source.getSheetByName("README");
-      if (!readmeSheet) {
-        return;
-      }
-      
+```javascript
+function onEdit(e) {
+  // Get the edited range and sheet
+  var range = e.range;
+  var sheet = range.getSheet();
+  var spreadsheet = sheet.getParent();
+  var sheetName = sheet.getName();
+  
+  // First handle the timestamp update (original functionality)
+  // Skip README and Drop-down values sheets for timestamp update
+  if (sheetName !== "README" && sheetName !== "Drop-down values") {
+    var readmeSheet = spreadsheet.getSheetByName("README");
+    if (readmeSheet) {
       // Find the Modification Timestamp section
       var data = readmeSheet.getDataRange().getValues();
       var timestampRowStart = -1;
@@ -146,32 +144,183 @@ To automatically track modifications in your Google Sheet, you can use the follo
         }
       }
       
-      if (timestampRowStart === -1) {
-        return;
-      }
-      
-      // Find the row for the current sheet
-      var sheetRow = -1;
-      for (var i = timestampRowStart; i < data.length; i++) {
-        if (data[i][0] === sheetName) {
-          sheetRow = i + 1; // +1 because arrays are 0-indexed but sheets are 1-indexed
-          break;
+      if (timestampRowStart !== -1) {
+        // Find the row for the current sheet
+        var sheetRow = -1;
+        for (var i = timestampRowStart; i < data.length; i++) {
+          if (data[i][0] === sheetName) {
+            sheetRow = i + 1; // +1 because arrays are 0-indexed but sheets are 1-indexed
+            break;
+          }
+        }
+        
+        if (sheetRow !== -1) {
+          // Get current time in ISO format
+          var now = new Date();
+          var timestamp = now.toISOString();
+          
+          // Update the timestamp and email
+          readmeSheet.getRange(sheetRow, 2).setValue(timestamp);
+          readmeSheet.getRange(sheetRow, 3).setValue(Session.getActiveUser().getEmail());
         }
       }
-      
-      if (sheetRow === -1) {
-        return;
-      }
-      
-      // Get current time in ISO format
-      var now = new Date();
-      var timestamp = now.toISOString(); // This gives format like "2025-01-29T13:49:09.123Z"
-      
-      // Update the timestamp and email
-      readmeSheet.getRange(sheetRow, 2).setValue(timestamp);
-      readmeSheet.getRange(sheetRow, 3).setValue(Session.getActiveUser().getEmail());
     }
-    ```
+  }
+  
+  // Then handle the validation checks (new functionality)
+  // Skip validation for README and Drop-down values sheets
+  if (sheetName === "README" || sheetName === "Drop-down values") {
+    return;
+  }
+  
+  // Get all sheets
+  var projectMetadataSheet = spreadsheet.getSheetByName("projectMetadata");
+  var analysisMetadataSheets = spreadsheet.getSheets().filter(s => 
+    s.getName().startsWith("analysisMetadata_"));
+  
+  if (!projectMetadataSheet || analysisMetadataSheets.length === 0) {
+    return; // Exit if required sheets don't exist
+  }
+  
+  // Get project_id from projectMetadata
+  var projectIdCell = findCellByValue(projectMetadataSheet, "project_id");
+  if (!projectIdCell) return;
+  
+  var projectId = projectMetadataSheet.getRange(projectIdCell.row, projectIdCell.col + 1).getValue();
+  
+  // Get assay_name values from projectMetadata
+  var assayNameCell = findCellByValue(projectMetadataSheet, "assay_name");
+  if (!assayNameCell) return;
+  
+  var assayNames = projectMetadataSheet.getRange(assayNameCell.row, assayNameCell.col + 1)
+    .getValue()
+    .split("|")
+    .map(name => name.trim());
+  
+  // Clear only error-related formatting
+  clearErrorFormatting(spreadsheet);
+  
+  // Verify project_id in all analysisMetadata sheets
+  var hasProjectIdError = false;
+  analysisMetadataSheets.forEach(analysisSheet => {
+    var analysisProjectIdCell = findCellByValue(analysisSheet, "project_id");
+    if (analysisProjectIdCell) {
+      var analysisProjectId = analysisSheet.getRange(analysisProjectIdCell.row, analysisProjectIdCell.col + 1).getValue();
+      if (analysisProjectId !== projectId) {
+        addErrorFormatting(analysisSheet, analysisProjectIdCell.row, analysisProjectIdCell.col + 1, 
+          "Project ID must match the one in projectMetadata sheet");
+        hasProjectIdError = true;
+      }
+    }
+  });
+  
+  // Verify assay_name values
+  var hasAssayNameError = false;
+  var foundAssayNames = new Set();
+  
+  analysisMetadataSheets.forEach(analysisSheet => {
+    var analysisAssayNameCell = findCellByValue(analysisSheet, "assay_name");
+    if (analysisAssayNameCell) {
+      var analysisAssayName = analysisSheet.getRange(analysisAssayNameCell.row, analysisAssayNameCell.col + 1).getValue();
+      if (!assayNames.includes(analysisAssayName)) {
+        addErrorFormatting(analysisSheet, analysisAssayNameCell.row, analysisAssayNameCell.col + 1,
+          "Assay name must match one of the values in projectMetadata sheet");
+        hasAssayNameError = true;
+      } else {
+        foundAssayNames.add(analysisAssayName);
+      }
+    }
+  });
+  
+  // Check if all assay names from projectMetadata are used
+  assayNames.forEach(assayName => {
+    if (!foundAssayNames.has(assayName)) {
+      addErrorFormatting(projectMetadataSheet, assayNameCell.row, assayNameCell.col + 1,
+        "Each assay name must be used in at least one analysisMetadata sheet");
+      hasAssayNameError = true;
+    }
+  });
+
+  // Verify analysis_run_name uniqueness within each sheet
+  analysisMetadataSheets.forEach(analysisSheet => {
+    var analysisRunNameCell = findCellByValue(analysisSheet, "analysis_run_name");
+    if (analysisRunNameCell) {
+      // Get all values in the column
+      var data = analysisSheet.getDataRange().getValues();
+      var analysisRunNameCol = analysisRunNameCell.col - 1; // Convert to 0-based index
+      var analysisRunNames = new Set();
+      
+      // Check each row in the column
+      for (var i = 0; i < data.length; i++) {
+        var value = data[i][analysisRunNameCol];
+        if (value && value.trim() !== "") { // Only check non-empty values
+          if (analysisRunNames.has(value)) {
+            // Found a duplicate
+            addErrorFormatting(analysisSheet, i + 1, analysisRunNameCell.col,
+              "Duplicate analysis_run_name found in this sheet");
+          } else {
+            analysisRunNames.add(value);
+          }
+        }
+      }
+    }
+  });
+}
+
+// Helper function to find a cell containing a specific value
+function findCellByValue(sheet, searchValue) {
+  var data = sheet.getDataRange().getValues();
+  for (var i = 0; i < data.length; i++) {
+    for (var j = 0; j < data[i].length; j++) {
+      if (data[i][j] === searchValue) {
+        return {row: i + 1, col: j + 1};
+      }
+    }
+  }
+  return null;
+}
+
+// Helper function to add error formatting
+function addErrorFormatting(sheet, row, col, message) {
+  var cell = sheet.getRange(row, col);
+  // Store the current note if it exists
+  var currentNote = cell.getNote();
+  // Only add the error message if it's not already there
+  if (!currentNote.includes(message)) {
+    cell.setNote(currentNote + (currentNote ? "\n" : "") + "ERROR: " + message);
+  }
+  // Add red background only if it's not already an error
+  if (cell.getBackground() !== "#ffebee") {
+    cell.setBackground("#ffebee"); // Light red background
+  }
+}
+
+// Helper function to clear only error-related formatting
+function clearErrorFormatting(spreadsheet) {
+  var sheets = spreadsheet.getSheets();
+  sheets.forEach(sheet => {
+    var dataRange = sheet.getDataRange();
+    var backgrounds = dataRange.getBackgrounds();
+    var notes = dataRange.getNotes();
+    
+    // Clear only error-related formatting
+    for (var i = 0; i < backgrounds.length; i++) {
+      for (var j = 0; j < backgrounds[i].length; j++) {
+        if (backgrounds[i][j] === "#ffebee") { // If it's our error background color
+          var cell = sheet.getRange(i + 1, j + 1);
+          // Remove only the error message from the note, keep other notes
+          var note = notes[i][j];
+          if (note) {
+            var errorLines = note.split("\n").filter(line => !line.startsWith("ERROR:"));
+            cell.setNote(errorLines.join("\n"));
+          }
+          cell.setBackground(null); // Remove the red background
+        }
+      }
+    }
+  });
+}
+```
 
 4. Click the disk icon or `File > Save` to save the script.
 5. Close the Apps Script editor.

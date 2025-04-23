@@ -1,0 +1,144 @@
+/* NODE Design System */
+:root {
+    --background: #141824;
+    --card-bg: #1E2337;
+    --primary-text: #E2E8F0;
+    --secondary-text: #E2E8F0;  /* Changed to white */
+    --light-blue: #7DBAE5;  /* Light blue for icons and non-button elements */
+    --accent: #1E3A8A;  /* Dark blue for buttons only */
+    --accent-hover: #1E40AF;  /* Slightly lighter dark blue for button hover */
+    --success-green: #1E3A8A;
+}
+
+/* Base Styles */
+body {
+    background-color: var(--background);
+    color: var(--primary-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    max-width: 1200px;
+    padding: 2rem;
+    width: 100%;
+}
+
+/* Header Styles */
+header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-top: 3rem;  /* Reduced to match bottom margin */
+}
+
+.success-message {
+    background-color: var(--success-green);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    font-weight: 600;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.logo {
+    max-width: 300px;
+    margin-bottom: 2rem;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+h1 {
+    font-size: 2.5rem;
+    margin: 0 0 1rem 0;
+    color: var(--light-blue);  /* Changed to light blue */
+}
+
+.subtitle {
+    font-size: 1.4rem;  /* Increased from 1.25rem */
+    color: var(--secondary-text);  /* Now white */
+    margin: 0 0 2rem 0;
+}
+
+/* Cards Container */
+.cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+/* Card Styles */
+.card {
+    background-color: var(--card-bg);
+    border-radius: 1rem;
+    padding: 2rem;
+    text-align: center;
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.card i {
+    font-size: 2.5rem;
+    color: var(--light-blue);
+    margin-bottom: 1.5rem;
+}
+
+.card h2 {
+    font-size: 1.5rem;
+    margin: 0 0 1rem 0;
+    color: var(--primary-text);
+}
+
+.card p {
+    color: var(--secondary-text);
+    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+}
+
+/* Button Styles */
+.button {
+    display: inline-block;
+    background-color: var(--accent);
+    color: var(--primary-text);
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.button:hover {
+    background-color: var(--accent-hover);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    .subtitle {
+        font-size: 1.1rem;
+    }
+
+    .cards-container {
+        grid-template-columns: 1fr;
+    }
+} 

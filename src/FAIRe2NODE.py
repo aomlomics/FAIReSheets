@@ -13,8 +13,9 @@ import gspread_formatting as gsf
 import pandas as pd
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
+from tqdm import tqdm
 
-from helpers.FAIRe2NODE_helpers import (
+from src.helpers.FAIRe2NODE_helpers import (
     get_bioinformatics_fields,
     remove_bioinfo_fields_from_project_metadata,
     remove_bioinfo_fields_from_experiment_metadata,
@@ -25,6 +26,8 @@ from helpers.FAIRe2NODE_helpers import (
     remove_taxa_sheets,
     create_analysis_metadata_sheets,
     add_noaa_fields_to_analysis_metadata,
+    update_readme_sheet_for_FAIRe2NODE,
+    show_next_steps_page
 )
 
 def FAIRe2NODE(client=None):
@@ -46,8 +49,6 @@ def FAIRe2NODE(client=None):
     if not spreadsheet_id:
         raise ValueError("SPREADSHEET_ID not found in .env file. Please create a .env file with SPREADSHEET_ID=your_sheet_id")
     
-    print("Starting FAIRe2NODE conversion...")
-    
     # Open the spreadsheet
     spreadsheet = client.open_by_key(spreadsheet_id)
     
@@ -64,98 +65,66 @@ def FAIRe2NODE(client=None):
     if not os.path.exists(noaa_checklist_path):
         raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
     
-    # Part 1: Remove bioinformatics fields
-    print("Part 1: Removing bioinformatics fields...")
+    # Create a progress bar for the entire process
+    pbar = tqdm(total=5, desc="Converting to NODE format", unit="step", position=0, leave=True)
     
-    # Get bioinformatics fields from NOAA checklist
-    bioinfo_fields = get_bioinformatics_fields(noaa_checklist_path)
-    print(f"Found {len(bioinfo_fields)} bioinformatics fields to remove")
-    
-    # Get the worksheets
     try:
+        # Get the worksheets
         project_metadata = spreadsheet.worksheet("projectMetadata")
         experiment_metadata = spreadsheet.worksheet("experimentRunMetadata")
         sample_metadata = spreadsheet.worksheet("sampleMetadata")
-    except gspread.exceptions.WorksheetNotFound as e:
-        raise Exception(f"Required worksheet not found: {e}")
-    
-    # Remove bioinformatics fields from projectMetadata
-    print("Removing bioinformatics fields from projectMetadata...")
-    remove_bioinfo_fields_from_project_metadata(project_metadata, bioinfo_fields)
-    
-    # Remove bioinformatics fields from experimentRunMetadata
-    print("Removing bioinformatics fields from experimentRunMetadata...")
-    remove_bioinfo_fields_from_experiment_metadata(experiment_metadata, bioinfo_fields)
-    
-    print("Part 1 completed successfully!")
-    
-    # Part 2: Add NOAA fields to sheets
-    print("\nPart 2: Adding NOAA fields to sheets...")
-    
-    # Define color styles for requirement levels - matching FAIReSheets exactly
-    req_col_df = pd.DataFrame({
-        'requirement_level': ["M = Mandatory", "HR = Highly recommended", "R = Recommended", "O = Optional"],
-        'requirement_level_code': ["M", "HR", "R", "O"],
-        'col': ["#E26B0A", "#FFCC00", "#FFFF99", "#CCFF99"]
-    })
-    
-    # Create color styles dictionary
-    color_styles = {}
-    for _, row in req_col_df.iterrows():
-        color_styles[row['requirement_level_code']] = gsf.CellFormat(
-            backgroundColor=gsf.Color.fromHex(row['col'])
-        )
-    
-    # Add NOAA project metadata fields
-    print("Adding NOAA project metadata fields...")
-    noaa_project_fields = get_noaa_fields(noaa_checklist_path, "NOAAprojectMetadata")
-    print(f"Found {len(noaa_project_fields)} NOAA project metadata fields to add")
-    add_noaa_fields_to_project_metadata(project_metadata, noaa_project_fields)
-    
-    # Add NOAA sample metadata fields
-    print("Adding NOAA sample metadata fields...")
-    noaa_sample_fields = get_noaa_fields(noaa_checklist_path, "NOAAsampleMetadata")
-    print(f"Found {len(noaa_sample_fields)} NOAA sample metadata fields to add")
-    add_noaa_fields_to_sample_metadata(sample_metadata, noaa_sample_fields)
-    
-    # Add NOAA experiment run metadata fields
-    print("Adding NOAA experiment run metadata fields...")
-    noaa_experiment_fields = get_noaa_fields(noaa_checklist_path, "NOAAexperimentRunMetadata")
-    print(f"Found {len(noaa_experiment_fields)} NOAA experiment run metadata fields to add")
-    add_noaa_fields_to_experiment_metadata(experiment_metadata, noaa_experiment_fields)
-    
-    print("Part 2 completed successfully!")
-    
-    # Part 3: Remove taxa sheets
-    print("\nPart 3: Removing taxa sheets...")
-    remove_taxa_sheets(spreadsheet)
-    print("Part 3 completed successfully!")
-    
-    # Part 4: Create analysisMetadata sheets
-    print("\nPart 4: Creating analysisMetadata sheets...")
-    analysis_worksheets = create_analysis_metadata_sheets(spreadsheet, config)
-    print(f"Created {len(analysis_worksheets)} analysisMetadata sheet(s)")
-    print("Part 4 completed successfully!")
-    
-    # Part 5: Add NOAA analysis metadata fields to analysisMetadata sheets
-    print("\nPart 5: Adding NOAA analysis metadata fields to analysisMetadata sheets...")
-    
-    # Get NOAA analysis metadata fields
-    noaa_analysis_fields = get_noaa_fields(noaa_checklist_path, "NOAAanalysisMetadata")
-    print(f"Found {len(noaa_analysis_fields)} NOAA analysis metadata fields to add")
-    
-    # Add NOAA analysis metadata fields to each analysisMetadata sheet
-    for analysis_run_name, worksheet in analysis_worksheets.items():
-        print(f"Adding NOAA analysis metadata fields to {worksheet.title}...")
-        add_noaa_fields_to_analysis_metadata(worksheet, noaa_analysis_fields, config, analysis_run_name)
-    
-    print("Part 5 completed successfully!")
+        
+        # Part 1: Remove bioinformatics fields
+        pbar.set_description("Removing bioinformatics fields")
+        bioinfo_fields = get_bioinformatics_fields(noaa_checklist_path)
+        remove_bioinfo_fields_from_project_metadata(project_metadata, bioinfo_fields)
+        remove_bioinfo_fields_from_experiment_metadata(experiment_metadata, bioinfo_fields)
+        pbar.update(1)
+        
+        # Part 2: Add NOAA fields to sheets
+        pbar.set_description("Adding NOAA fields")
+        noaa_project_fields = get_noaa_fields(noaa_checklist_path, "NOAAprojectMetadata")
+        add_noaa_fields_to_project_metadata(project_metadata, noaa_project_fields)
+        
+        noaa_sample_fields = get_noaa_fields(noaa_checklist_path, "NOAAsampleMetadata")
+        add_noaa_fields_to_sample_metadata(sample_metadata, noaa_sample_fields)
+        
+        noaa_experiment_fields = get_noaa_fields(noaa_checklist_path, "NOAAexperimentRunMetadata")
+        add_noaa_fields_to_experiment_metadata(experiment_metadata, noaa_experiment_fields)
+        pbar.update(1)
+        
+        # Part 3: Remove taxa sheets
+        pbar.set_description("Removing taxa sheets")
+        remove_taxa_sheets(spreadsheet)
+        pbar.update(1)
+        
+        # Part 4: Create analysisMetadata sheets
+        pbar.set_description("Creating analysis sheets")
+        analysis_worksheets = create_analysis_metadata_sheets(spreadsheet, config)
+        pbar.update(1)
+        
+        # Part 5: Add NOAA analysis metadata fields
+        pbar.set_description("Updating metadata")
+        noaa_analysis_fields = get_noaa_fields(noaa_checklist_path, "NOAAanalysisMetadata")
+        for analysis_run_name, worksheet in analysis_worksheets.items():
+            add_noaa_fields_to_analysis_metadata(worksheet, noaa_analysis_fields, config, analysis_run_name)
+        update_readme_sheet_for_FAIRe2NODE(spreadsheet, config)
+        pbar.update(1)
+        
+        # Close the progress bar
+        pbar.close()
+        
+        # Show the next steps page
+        show_next_steps_page()
+        
+    except Exception as e:
+        pbar.close()
+        raise Exception(f"Error during conversion: {e}")
 
 # Add this code to execute the function when the script is run directly
 if __name__ == "__main__":
     from auth import authenticate
     
-    print("Starting FAIRe2NODE...")
     try:
         # Authenticate with Google
         client = authenticate()
@@ -163,6 +132,5 @@ if __name__ == "__main__":
         # Run the conversion
         FAIRe2NODE(client=client)
         
-        print("FAIRe2NODE completed successfully!")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n❌ Error: {e}")
