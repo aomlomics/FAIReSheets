@@ -1,10 +1,12 @@
-# FAIReSheets
+# FAIRe2NODE
 
-This project is actively under development. Reach out to bayden.willms@noaa.gov for questions and for credentials to run this code.
+FAIRe2NODE is NOAA's version of FAIRe templates. This code generates the data templates, which, once filled with data, are ready for NODE submission, and, if run through edna2obis **(currently under development)**, are ready for GBIF and OBIS submission. 
+
+If you are looking for **FAIReSheets** / the generic FAIRe templates, switch to the main branch of this repository.
 
 FAIReSheets generates the FAIRe eDNA Data Template in Google Sheets. The FAIRe template is a collaborative effort in the eDNA research field to standardize its complicated data and metadata. FAIReSheets replicates the template creation from the [FAIRe-ator Repository](https://github.com/FAIR-eDNA/FAIRe-ator/tree/main) from Dr. Miwa Takahashi and Dr. Stephen Formel, except FAIReSheets outputs the template to Google Sheets rather than a Microsoft Excel spreadsheet. 
 
-TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml`, run FAIReSheets and follow the authentication workflow.
+TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and `NOAA_config.yaml`, run FAIRe2NODE and follow the authentication workflow.
 
 ```bash
 python run.py 
@@ -13,7 +15,7 @@ python run.py
 ## Setup
 
 ### Access Request (Required)
-Before using FAIReSheets, you'll need to request access. This only needs to happen once:
+Before using FAIRe2NODE, you'll need to request access. This only needs to happen once:
 
 1. Email bayden.willms@noaa.gov
 2. Include your Google account email in the request (the one you'll use to access Google Sheets)
@@ -86,9 +88,9 @@ GIST_URL=https://gist.githubusercontent.com/user/hash/raw/file.json
 
 ## Run
 
-Before running FAIReSheets, configure the `config.yaml` file given your desired parameters. Please refer to the `config_TEMPLATE.yaml` for the available parameter options. These parameters determine the structure of your generated FAIRe template. You can also specify additional terms to add if you have relevant fields in your data that are not included in the FAIRe template. Just remember, `config_TEMPLATE.yaml` is just for you to know all the parameter options, and `config.yaml` is what the code actually uses.
+Before running FAIRe2NODE, configure the `config.yaml` and `NOAA_config.yaml` files given your desired parameters. Please refer to the `config_TEMPLATE.yaml` for the available parameter options. These parameters determine the structure of your generated FAIRe template. You can also specify additional terms to add if you have relevant fields in your data that are not included in the FAIRe template. Just remember, `config_TEMPLATE.yaml` is just for you to know all the parameter options, and `config.yaml` and `NOAA_config.yaml` is what the code actually uses.
 
-Run FAIReSheets from the root project directory using: 
+Run FAIRe2NODE from the root project directory using: 
 ```bash
 python run.py
 ```
@@ -98,11 +100,11 @@ Or alternatively you can run the `run.py` script in your IDE using the Play butt
 
 ## Run > Authentication
 
-When you run FAIReSheets for the first time, the following will happen:
+When you run FAIRe2NODE for the first time, the following will happen:
 
 1. The tool will download the authentication credentials from the Git Gist URL sent to you via email
 2. A browser window will open asking you to sign in with your Google account
-3. You'll be asked to grant permission to FAIReSheets to access your Google Sheets
+3. You'll be asked to grant permission to FAIRe2NODE to access your Google Sheets
 4. After granting permission, the tool will save a token for future use
 5. Future runs won't require reauthentication
 
