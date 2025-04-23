@@ -978,7 +978,6 @@ def add_noaa_fields_to_analysis_metadata(worksheet, noaa_fields, config, analysi
         
         # Initialize with required headers
         headers = ['requirement_level_code', 'section', 'term_name', 'values']
-        worksheet.update('A1', [headers])
         
         # Prepare rows to add
         rows = []
@@ -1004,14 +1003,50 @@ def add_noaa_fields_to_analysis_metadata(worksheet, noaa_fields, config, analysi
         # Convert to DataFrame for easier handling
         df = pd.DataFrame(rows)
         
-        # Update worksheet with all data
-        worksheet.resize(rows=len(rows) + 10, cols=len(headers) + 5)  # Add buffer
-        worksheet.update('A2', df.values.tolist())
+        # Prepare all data for a single batch update
+        all_data = [headers] + df.values.tolist()
         
-        # Prepare a single batch request for all formatting
+        # Define color styles for requirement levels
+        color_styles = {
+            "M": {"red": 0.89, "green": 0.42, "blue": 0.04},  # #E26B0A - Orange
+            "HR": {"red": 1.0, "green": 0.8, "blue": 0.0},    # #FFCC00 - Yellow
+            "R": {"red": 1.0, "green": 1.0, "blue": 0.6},     # #FFFF99 - Light yellow
+            "O": {"red": 0.8, "green": 1.0, "blue": 0.6}      # #CCFF99 - Light green
+        }
+        
+        # Prepare a single batch request for all operations
         batch_requests = []
         
-        # 1. Add header formatting
+        # 1. Resize the worksheet
+        batch_requests.append({
+            "updateSheetProperties": {
+                "properties": {
+                    "sheetId": worksheet.id,
+                    "gridProperties": {
+                        "rowCount": len(all_data) + 10,  # Add buffer
+                        "columnCount": len(headers) + 5   # Add buffer
+                    }
+                },
+                "fields": "gridProperties(rowCount,columnCount)"
+            }
+        })
+        
+        # 2. Update all data at once
+        batch_requests.append({
+            "updateCells": {
+                "range": {
+                    "sheetId": worksheet.id,
+                    "startRowIndex": 0,
+                    "endRowIndex": len(all_data),
+                    "startColumnIndex": 0,
+                    "endColumnIndex": len(headers)
+                },
+                "rows": [{"values": [{"userEnteredValue": {"stringValue": str(cell)}} for cell in row]} for row in all_data],
+                "fields": "userEnteredValue"
+            }
+        })
+        
+        # 3. Add header formatting (bold)
         batch_requests.append({
             "repeatCell": {
                 "range": {
@@ -1032,15 +1067,7 @@ def add_noaa_fields_to_analysis_metadata(worksheet, noaa_fields, config, analysi
             }
         })
         
-        # Define color styles for requirement levels
-        color_styles = {
-            "M": {"red": 0.89, "green": 0.42, "blue": 0.04},  # #E26B0A - Orange
-            "HR": {"red": 1.0, "green": 0.8, "blue": 0.0},    # #FFCC00 - Yellow
-            "R": {"red": 1.0, "green": 1.0, "blue": 0.6},     # #FFFF99 - Light yellow
-            "O": {"red": 0.8, "green": 1.0, "blue": 0.6}      # #CCFF99 - Light green
-        }
-        
-        # 2. Add formatting for each row
+        # 4. Add formatting for each row
         for i, row in enumerate(rows, start=2):  # Start from row 2 (after headers)
             req_level = row['requirement_level_code']
             
@@ -1131,15 +1158,23 @@ def add_noaa_fields_to_analysis_metadata(worksheet, noaa_fields, config, analysi
                         }
                     })
         
-        # Execute all formatting in a single batch request
-        try:
-            worksheet.spreadsheet.batch_update({"requests": batch_requests})
-        except gspread.exceptions.APIError as e:
-            if "429" in str(e):  # Rate limit error
-                time.sleep(60)
+        # Execute all operations in a single batch request with exponential backoff retry
+        max_retries = 5
+        retry_count = 0
+        wait_time = 2  # Initial wait time in seconds
+        
+        while retry_count < max_retries:
+            try:
                 worksheet.spreadsheet.batch_update({"requests": batch_requests})
-            else:
-                raise
+                break  # Success, exit the retry loop
+            except gspread.exceptions.APIError as e:
+                if "429" in str(e) and retry_count < max_retries - 1:  # Rate limit error and still have retries
+                    retry_count += 1
+                    print(f"Rate limit hit. Retrying in {wait_time} seconds (attempt {retry_count}/{max_retries})...")
+                    time.sleep(wait_time)
+                    wait_time *= 2  # Exponential backoff
+                else:
+                    raise  # Re-raise if it's not a rate limit error or we're out of retries
         
     except Exception as e:
         raise Exception(f"Error adding NOAA fields to analysisMetadata: {e}")
