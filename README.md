@@ -292,8 +292,8 @@ function addErrorFormatting(sheet, row, col, message) {
     cell.setNote(currentNote + (currentNote ? "\n" : "") + "ERROR: " + message);
   }
   // Add red background only if it's not already an error
-  if (cell.getBackground() !== "#ffebee") {
-    cell.setBackground("#ffebee"); // Light red background
+  if (cell.getBackground() !== "#ff0000") {
+    cell.setBackground("#ff0000"); // Light red background
   }
 }
 

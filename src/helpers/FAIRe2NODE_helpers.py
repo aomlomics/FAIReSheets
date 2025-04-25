@@ -81,20 +81,6 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                 }
             })
         
-        # Add request to delete columns after column D (project_level)
-        if project_level_col is not None and project_level_col + 1 < len(headers):
-            # Delete all columns after project_level column
-            batch_requests.append({
-                "deleteDimension": {
-                    "range": {
-                        "sheetId": worksheet.id,
-                        "dimension": "COLUMNS",
-                        "startIndex": project_level_col + 1,  # Start after project_level column
-                        "endIndex": len(headers)  # Delete all remaining columns
-                    }
-                }
-            })
-        
         # Execute batch delete
         if batch_requests:
             try:
@@ -166,19 +152,8 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                     worksheet.spreadsheet.batch_update({"requests": validation_requests})
                 else:
                     raise
-        
-        # Remove the last 5 rows from the projectMetadata sheet
-        # Get the current row count after previous operations
-        current_data = worksheet.get_all_values()
-        total_rows = len(current_data)
-        
-        if total_rows > 5:  # Only proceed if there are at least 6 rows (to keep the header)
-            # Try direct row deletion instead of batch update
-            start_row = total_rows - 4  # 1-based indexing for delete_rows
-            worksheet.delete_rows(start_row, total_rows)
-                    
     except Exception as e:
-        raise Exception(f"Error removing bioinformatics fields from projectMetadata: {e}")
+        raise Exception(f"Error removing bioinformatics fields from projectMetadata: {e}") 
 
 def remove_bioinfo_fields_from_experiment_metadata(worksheet, bioinfo_fields):
     """
