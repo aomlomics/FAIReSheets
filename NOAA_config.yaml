@@ -2,14 +2,14 @@
 # It is used to set parameters for the FAIRe2NODE run
 
 # Required: Project ID (must match the project_id used in FAIReSheets)
-project_id: "to_NODE_testing"
+project_id: "fix_fairenode_bugs"
 
 # Optional: Analysis run names and their corresponding assay names
 # If not provided, a generic analysisMetadata sheet will be created
 # Use the exact analysis_run_name and assay_name values from your NOAA checklist
 analysis_run_name:
-  gomecc4_16s_p1-2_v2024.10_241122:  # This is the analysis_run_name from your NOAA checklist
-    assay_name: "ssu16sv4v5-emp"  # This is the assay_name from your NOAA checklist
+  gomecc4_16s_p1-2_v2024.10_241122: # This is the analysis_run_name from your NOAA checklist
+    assay_name: "ssu16sv4v5-emp" # This is the assay_name from your NOAA checklist
   # Add more analysis runs as needed, using the exact names from your NOAA checklist
   gomecc4_16s_p3-6_v2024.10_241122:
     assay_name: "ssu16sv4v5-emp"

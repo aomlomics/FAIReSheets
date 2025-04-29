@@ -277,12 +277,8 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
             new_row['term_name'] = row['term_name']
             new_row['requirement_level_code'] = row['requirement_level_code']
             new_row['section'] = row['section']
-            new_row['description'] = row['description'] if 'description' in row and row['description'] != '' else ''
             
-            # Add controlled vocabulary if available
-            if 'controlled_vocabulary' in row and row['controlled_vocabulary'] != '':
-                new_row['controlled_vocabulary'] = row['controlled_vocabulary']
-            
+            # Add to new rows
             new_rows.append(new_row)
         
         # Convert to DataFrame and append to existing data
@@ -310,6 +306,7 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
         # Format cells based on requirement level
         req_level_col = headers.index('requirement_level_code')
         term_name_col = headers.index('term_name')
+        project_level_col = headers.index('project_level')
         
         # Batch requests for formatting
         batch_requests = []
@@ -370,13 +367,18 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
         if batch_requests:
             worksheet.spreadsheet.batch_update({"requests": batch_requests})
             
-        # Add descriptions as notes
+        # Add descriptions as notes and controlled vocabulary dropdowns
         note_requests = []
-        desc_col = headers.index('description') if 'description' in headers else None
+        validation_requests = []
         
-        if desc_col is not None:
-            for i, row in enumerate(updated_data[1:], start=1):
-                if desc_col < len(row) and row[desc_col]:
+        for i, row in enumerate(updated_data[1:], start=1):
+            term_name = row[term_name_col]
+            term_info = noaa_fields[noaa_fields['term_name'] == term_name]
+            
+            if not term_info.empty:
+                # Add description as note
+                description = term_info.iloc[0]['description'] if 'description' in term_info.columns else ''
+                if description:
                     note_requests.append({
                         "updateCells": {
                             "range": {
@@ -388,46 +390,41 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
                             },
                             "rows": [{
                                 "values": [{
-                                    "note": row[desc_col]
+                                    "note": description
                                 }]
                             }],
                             "fields": "note"
                         }
                     })
-        
-        # Apply notes
-        if note_requests:
-            worksheet.spreadsheet.batch_update({"requests": note_requests})
-            
-        # Add data validation for controlled vocabulary
-        validation_requests = []
-        cv_col = headers.index('controlled_vocabulary') if 'controlled_vocabulary' in headers else None
-        
-        if cv_col is not None:
-            for i, row in enumerate(updated_data[1:], start=1):
-                if cv_col < len(row) and row[cv_col]:
-                    # Parse the controlled vocabulary values
-                    cv_values = [v.strip() for v in row[cv_col].split('|') if v.strip()]
-                    if cv_values:
+                
+                # Add controlled vocabulary dropdown
+                cv_options = term_info.iloc[0]['controlled_vocabulary_options'] if 'controlled_vocabulary_options' in term_info.columns else ''
+                if pd.notna(cv_options) and cv_options:
+                    values = [v.strip() for v in str(cv_options).split('|') if v.strip()]
+                    if values:
                         validation_requests.append({
                             "setDataValidation": {
                                 "range": {
                                     "sheetId": worksheet.id,
                                     "startRowIndex": i,
                                     "endRowIndex": i + 1,
-                                    "startColumnIndex": cv_col,
-                                    "endColumnIndex": cv_col + 1
+                                    "startColumnIndex": project_level_col,
+                                    "endColumnIndex": project_level_col + 1
                                 },
                                 "rule": {
                                     "condition": {
                                         "type": "ONE_OF_LIST",
-                                        "values": [{"userEnteredValue": v} for v in cv_values]
+                                        "values": [{"userEnteredValue": v} for v in values]
                                     },
                                     "showCustomUi": True,
                                     "strict": False
                                 }
                             }
                         })
+        
+        # Apply notes
+        if note_requests:
+            worksheet.spreadsheet.batch_update({"requests": note_requests})
         
         # Apply data validation
         if validation_requests:
@@ -576,13 +573,17 @@ def add_noaa_fields_to_experiment_metadata(worksheet, noaa_fields):
         if batch_requests:
             worksheet.spreadsheet.batch_update({"requests": batch_requests})
             
-        # Add notes to term names
+        # Add notes to term names and controlled vocabulary dropdowns
         note_requests = []
+        validation_requests = []
+        
         for col_idx in new_cols:
             term_name = sheet_df.iloc[term_name_row, col_idx]
             term_rows = noaa_fields[noaa_fields['term_name'] == term_name]
             if not term_rows.empty:
                 term_info = term_rows.iloc[0]
+                
+                # Add description as note
                 if 'description' in term_info and term_info['description']:
                     note_requests.append({
                         "updateCells": {
@@ -601,28 +602,22 @@ def add_noaa_fields_to_experiment_metadata(worksheet, noaa_fields):
                             "fields": "note"
                         }
                     })
-        
-        # Apply notes
-        if note_requests:
-            worksheet.spreadsheet.batch_update({"requests": note_requests})
-            
-        # Add data validation for controlled vocabulary
-        validation_requests = []
-        for col_idx in new_cols:
-            term_name = sheet_df.iloc[term_name_row, col_idx]
-            term_rows = noaa_fields[noaa_fields['term_name'] == term_name]
-            if not term_rows.empty:
-                term_info = term_rows.iloc[0]
-                if 'controlled_vocabulary' in term_info and term_info['controlled_vocabulary']:
+                
+                # Add controlled vocabulary dropdown - FIXED VERSION
+                if 'controlled_vocabulary_options' in term_info and term_info['controlled_vocabulary_options']:
                     # Parse the controlled vocabulary values
-                    cv_values = [v.strip() for v in str(term_info['controlled_vocabulary']).split('|') if v.strip()]
+                    cv_values = [v.strip() for v in str(term_info['controlled_vocabulary_options']).split('|') if v.strip()]
                     if cv_values:
+                        # Remove the debug print that was interrupting the progress bar
+                        # print(f"Adding dropdown for {term_name} with values: {cv_values}")
+                        
+                        # Apply to all data rows
                         validation_requests.append({
                             "setDataValidation": {
                                 "range": {
                                     "sheetId": worksheet.id,
                                     "startRowIndex": term_name_row + 1,  # Start from the row after term names
-                                    "endRowIndex": len(updated_data),
+                                    "endRowIndex": max(term_name_row + 20, len(updated_data)),  # Ensure we have enough rows
                                     "startColumnIndex": col_idx,
                                     "endColumnIndex": col_idx + 1
                                 },
@@ -636,6 +631,10 @@ def add_noaa_fields_to_experiment_metadata(worksheet, noaa_fields):
                                 }
                             }
                         })
+        
+        # Apply notes
+        if note_requests:
+            worksheet.spreadsheet.batch_update({"requests": note_requests})
         
         # Apply data validation
         if validation_requests:
@@ -781,13 +780,17 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
         if batch_requests:
             worksheet.spreadsheet.batch_update({"requests": batch_requests})
             
-        # Add notes to term names
+        # Add notes to term names and controlled vocabulary dropdowns
         note_requests = []
+        validation_requests = []
+        
         for col_idx in new_cols:
             term_name = sheet_df.iloc[term_name_row, col_idx]
             term_rows = noaa_fields[noaa_fields['term_name'] == term_name]
             if not term_rows.empty:
                 term_info = term_rows.iloc[0]
+                
+                # Add description as note
                 if 'description' in term_info and term_info['description']:
                     note_requests.append({
                         "updateCells": {
@@ -806,28 +809,18 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
                             "fields": "note"
                         }
                     })
-        
-        # Apply notes
-        if note_requests:
-            worksheet.spreadsheet.batch_update({"requests": note_requests})
-            
-        # Add data validation for controlled vocabulary
-        validation_requests = []
-        for col_idx in new_cols:
-            term_name = sheet_df.iloc[term_name_row, col_idx]
-            term_rows = noaa_fields[noaa_fields['term_name'] == term_name]
-            if not term_rows.empty:
-                term_info = term_rows.iloc[0]
-                if 'controlled_vocabulary' in term_info and term_info['controlled_vocabulary']:
+                
+                # Add controlled vocabulary dropdown
+                if 'controlled_vocabulary_options' in term_info and term_info['controlled_vocabulary_options']:
                     # Parse the controlled vocabulary values
-                    cv_values = [v.strip() for v in str(term_info['controlled_vocabulary']).split('|') if v.strip()]
+                    cv_values = [v.strip() for v in str(term_info['controlled_vocabulary_options']).split('|') if v.strip()]
                     if cv_values:
                         validation_requests.append({
                             "setDataValidation": {
                                 "range": {
                                     "sheetId": worksheet.id,
                                     "startRowIndex": term_name_row + 1,  # Start from the row after term names
-                                    "endRowIndex": len(updated_data),
+                                    "endRowIndex": max(term_name_row + 20, len(updated_data)),  # Ensure we have enough rows
                                     "startColumnIndex": col_idx,
                                     "endColumnIndex": col_idx + 1
                                 },
@@ -841,6 +834,10 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
                                 }
                             }
                         })
+        
+        # Apply notes
+        if note_requests:
+            worksheet.spreadsheet.batch_update({"requests": note_requests})
         
         # Apply data validation
         if validation_requests:
