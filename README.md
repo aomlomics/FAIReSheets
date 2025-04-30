@@ -232,12 +232,12 @@ function onEdit(e) {
   if (sheetName !== "README" && sheetName !== "Drop-down values") {
     var readmeSheet = spreadsheet.getSheetByName("README");
     if (readmeSheet) {
-      // Find the Modification Timestamp section
+      // Find the Sheets in this Google Sheet section
       var data = readmeSheet.getDataRange().getValues();
       var timestampRowStart = -1;
       
       for (var i = 0; i < data.length; i++) {
-        if (data[i][0] === "Modification Timestamp:") {
+        if (data[i][0] === "Sheets in this Google Sheet:") {
           timestampRowStart = i + 2; // +2 to skip the header row
           break;
         }
@@ -405,7 +405,7 @@ function clearErrorFormatting(spreadsheet) {
     // Clear only error-related formatting
     for (var i = 0; i < backgrounds.length; i++) {
       for (var j = 0; j < backgrounds[i].length; j++) {
-        if (backgrounds[i][j] === "#ffebee") { // If it's our error background color
+        if (backgrounds[i][j] === "#ff0000") { // If it's our error background color
           var cell = sheet.getRange(i + 1, j + 1);
           // Remove only the error message from the note, keep other notes
           var note = notes[i][j];
