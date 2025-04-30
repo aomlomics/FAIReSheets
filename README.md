@@ -24,15 +24,25 @@ Before using FAIRe2NODE, you'll need to request access. This only needs to happe
 ### Installation
 This project requires Python and a few additional Python libraries. You have **two options** for installation - choose **either** the Anaconda method **OR** the pip method, not both:
 
-#### Prerequisite for all users:
+#### Clone the Repository to your Computer:
 First, install Git to download the project:
 - [Download and install Git](https://git-scm.com/downloads)
 
-Then, download the project code:
+Then, download the project code. Choose ONE of these options:
+
+**Option 1:** If you have **NOT** cloned FAIReSheets before:
 ```bash
-git clone https://github.com/baydenwillms/FAIReSheets.git
+git clone -b FAIRe2NODE https://github.com/baydenwillms/FAIReSheets.git
 cd FAIReSheets
 ```
+
+**Option 2:** If you already have FAIReSheets cloned (main branch):
+```bash
+cd FAIReSheets
+git fetch origin FAIRe2NODE
+git checkout FAIRe2NODE
+```
+
 
 #### Option 1: Install with Anaconda (Recommended for simplified environment management)
 Anaconda is a scientific Python distribution that handles package dependencies and environment management automatically, it helps users avoid common installation issues:
