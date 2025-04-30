@@ -81,20 +81,6 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                 }
             })
         
-        # Add request to delete columns after column D (project_level)
-        if project_level_col is not None and project_level_col + 1 < len(headers):
-            # Delete all columns after project_level column
-            batch_requests.append({
-                "deleteDimension": {
-                    "range": {
-                        "sheetId": worksheet.id,
-                        "dimension": "COLUMNS",
-                        "startIndex": project_level_col + 1,  # Start after project_level column
-                        "endIndex": len(headers)  # Delete all remaining columns
-                    }
-                }
-            })
-        
         # Execute batch delete
         if batch_requests:
             try:
@@ -166,19 +152,8 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
                     worksheet.spreadsheet.batch_update({"requests": validation_requests})
                 else:
                     raise
-        
-        # Remove the last 5 rows from the projectMetadata sheet
-        # Get the current row count after previous operations
-        current_data = worksheet.get_all_values()
-        total_rows = len(current_data)
-        
-        if total_rows > 5:  # Only proceed if there are at least 6 rows (to keep the header)
-            # Try direct row deletion instead of batch update
-            start_row = total_rows - 4  # 1-based indexing for delete_rows
-            worksheet.delete_rows(start_row, total_rows)
-                    
     except Exception as e:
-        raise Exception(f"Error removing bioinformatics fields from projectMetadata: {e}")
+        raise Exception(f"Error removing bioinformatics fields from projectMetadata: {e}") 
 
 def remove_bioinfo_fields_from_experiment_metadata(worksheet, bioinfo_fields):
     """
@@ -302,12 +277,8 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
             new_row['term_name'] = row['term_name']
             new_row['requirement_level_code'] = row['requirement_level_code']
             new_row['section'] = row['section']
-            new_row['description'] = row['description'] if 'description' in row and row['description'] != '' else ''
             
-            # Add controlled vocabulary if available
-            if 'controlled_vocabulary' in row and row['controlled_vocabulary'] != '':
-                new_row['controlled_vocabulary'] = row['controlled_vocabulary']
-            
+            # Add to new rows
             new_rows.append(new_row)
         
         # Convert to DataFrame and append to existing data
@@ -335,6 +306,7 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
         # Format cells based on requirement level
         req_level_col = headers.index('requirement_level_code')
         term_name_col = headers.index('term_name')
+        project_level_col = headers.index('project_level')
         
         # Batch requests for formatting
         batch_requests = []
@@ -395,13 +367,18 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
         if batch_requests:
             worksheet.spreadsheet.batch_update({"requests": batch_requests})
             
-        # Add descriptions as notes
+        # Add descriptions as notes and controlled vocabulary dropdowns
         note_requests = []
-        desc_col = headers.index('description') if 'description' in headers else None
+        validation_requests = []
         
-        if desc_col is not None:
-            for i, row in enumerate(updated_data[1:], start=1):
-                if desc_col < len(row) and row[desc_col]:
+        for i, row in enumerate(updated_data[1:], start=1):
+            term_name = row[term_name_col]
+            term_info = noaa_fields[noaa_fields['term_name'] == term_name]
+            
+            if not term_info.empty:
+                # Add description as note
+                description = term_info.iloc[0]['description'] if 'description' in term_info.columns else ''
+                if description:
                     note_requests.append({
                         "updateCells": {
                             "range": {
@@ -413,46 +390,41 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
                             },
                             "rows": [{
                                 "values": [{
-                                    "note": row[desc_col]
+                                    "note": description
                                 }]
                             }],
                             "fields": "note"
                         }
                     })
-        
-        # Apply notes
-        if note_requests:
-            worksheet.spreadsheet.batch_update({"requests": note_requests})
-            
-        # Add data validation for controlled vocabulary
-        validation_requests = []
-        cv_col = headers.index('controlled_vocabulary') if 'controlled_vocabulary' in headers else None
-        
-        if cv_col is not None:
-            for i, row in enumerate(updated_data[1:], start=1):
-                if cv_col < len(row) and row[cv_col]:
-                    # Parse the controlled vocabulary values
-                    cv_values = [v.strip() for v in row[cv_col].split('|') if v.strip()]
-                    if cv_values:
+                
+                # Add controlled vocabulary dropdown
+                cv_options = term_info.iloc[0]['controlled_vocabulary_options'] if 'controlled_vocabulary_options' in term_info.columns else ''
+                if pd.notna(cv_options) and cv_options:
+                    values = [v.strip() for v in str(cv_options).split('|') if v.strip()]
+                    if values:
                         validation_requests.append({
                             "setDataValidation": {
                                 "range": {
                                     "sheetId": worksheet.id,
                                     "startRowIndex": i,
                                     "endRowIndex": i + 1,
-                                    "startColumnIndex": cv_col,
-                                    "endColumnIndex": cv_col + 1
+                                    "startColumnIndex": project_level_col,
+                                    "endColumnIndex": project_level_col + 1
                                 },
                                 "rule": {
                                     "condition": {
                                         "type": "ONE_OF_LIST",
-                                        "values": [{"userEnteredValue": v} for v in cv_values]
+                                        "values": [{"userEnteredValue": v} for v in values]
                                     },
                                     "showCustomUi": True,
                                     "strict": False
                                 }
                             }
                         })
+        
+        # Apply notes
+        if note_requests:
+            worksheet.spreadsheet.batch_update({"requests": note_requests})
         
         # Apply data validation
         if validation_requests:
@@ -601,13 +573,17 @@ def add_noaa_fields_to_experiment_metadata(worksheet, noaa_fields):
         if batch_requests:
             worksheet.spreadsheet.batch_update({"requests": batch_requests})
             
-        # Add notes to term names
+        # Add notes to term names and controlled vocabulary dropdowns
         note_requests = []
+        validation_requests = []
+        
         for col_idx in new_cols:
             term_name = sheet_df.iloc[term_name_row, col_idx]
             term_rows = noaa_fields[noaa_fields['term_name'] == term_name]
             if not term_rows.empty:
                 term_info = term_rows.iloc[0]
+                
+                # Add description as note
                 if 'description' in term_info and term_info['description']:
                     note_requests.append({
                         "updateCells": {
@@ -626,28 +602,22 @@ def add_noaa_fields_to_experiment_metadata(worksheet, noaa_fields):
                             "fields": "note"
                         }
                     })
-        
-        # Apply notes
-        if note_requests:
-            worksheet.spreadsheet.batch_update({"requests": note_requests})
-            
-        # Add data validation for controlled vocabulary
-        validation_requests = []
-        for col_idx in new_cols:
-            term_name = sheet_df.iloc[term_name_row, col_idx]
-            term_rows = noaa_fields[noaa_fields['term_name'] == term_name]
-            if not term_rows.empty:
-                term_info = term_rows.iloc[0]
-                if 'controlled_vocabulary' in term_info and term_info['controlled_vocabulary']:
+                
+                # Add controlled vocabulary dropdown - FIXED VERSION
+                if 'controlled_vocabulary_options' in term_info and term_info['controlled_vocabulary_options']:
                     # Parse the controlled vocabulary values
-                    cv_values = [v.strip() for v in str(term_info['controlled_vocabulary']).split('|') if v.strip()]
+                    cv_values = [v.strip() for v in str(term_info['controlled_vocabulary_options']).split('|') if v.strip()]
                     if cv_values:
+                        # Remove the debug print that was interrupting the progress bar
+                        # print(f"Adding dropdown for {term_name} with values: {cv_values}")
+                        
+                        # Apply to all data rows
                         validation_requests.append({
                             "setDataValidation": {
                                 "range": {
                                     "sheetId": worksheet.id,
                                     "startRowIndex": term_name_row + 1,  # Start from the row after term names
-                                    "endRowIndex": len(updated_data),
+                                    "endRowIndex": max(term_name_row + 20, len(updated_data)),  # Ensure we have enough rows
                                     "startColumnIndex": col_idx,
                                     "endColumnIndex": col_idx + 1
                                 },
@@ -661,6 +631,10 @@ def add_noaa_fields_to_experiment_metadata(worksheet, noaa_fields):
                                 }
                             }
                         })
+        
+        # Apply notes
+        if note_requests:
+            worksheet.spreadsheet.batch_update({"requests": note_requests})
         
         # Apply data validation
         if validation_requests:
@@ -806,13 +780,17 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
         if batch_requests:
             worksheet.spreadsheet.batch_update({"requests": batch_requests})
             
-        # Add notes to term names
+        # Add notes to term names and controlled vocabulary dropdowns
         note_requests = []
+        validation_requests = []
+        
         for col_idx in new_cols:
             term_name = sheet_df.iloc[term_name_row, col_idx]
             term_rows = noaa_fields[noaa_fields['term_name'] == term_name]
             if not term_rows.empty:
                 term_info = term_rows.iloc[0]
+                
+                # Add description as note
                 if 'description' in term_info and term_info['description']:
                     note_requests.append({
                         "updateCells": {
@@ -831,28 +809,18 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
                             "fields": "note"
                         }
                     })
-        
-        # Apply notes
-        if note_requests:
-            worksheet.spreadsheet.batch_update({"requests": note_requests})
-            
-        # Add data validation for controlled vocabulary
-        validation_requests = []
-        for col_idx in new_cols:
-            term_name = sheet_df.iloc[term_name_row, col_idx]
-            term_rows = noaa_fields[noaa_fields['term_name'] == term_name]
-            if not term_rows.empty:
-                term_info = term_rows.iloc[0]
-                if 'controlled_vocabulary' in term_info and term_info['controlled_vocabulary']:
+                
+                # Add controlled vocabulary dropdown
+                if 'controlled_vocabulary_options' in term_info and term_info['controlled_vocabulary_options']:
                     # Parse the controlled vocabulary values
-                    cv_values = [v.strip() for v in str(term_info['controlled_vocabulary']).split('|') if v.strip()]
+                    cv_values = [v.strip() for v in str(term_info['controlled_vocabulary_options']).split('|') if v.strip()]
                     if cv_values:
                         validation_requests.append({
                             "setDataValidation": {
                                 "range": {
                                     "sheetId": worksheet.id,
                                     "startRowIndex": term_name_row + 1,  # Start from the row after term names
-                                    "endRowIndex": len(updated_data),
+                                    "endRowIndex": max(term_name_row + 20, len(updated_data)),  # Ensure we have enough rows
                                     "startColumnIndex": col_idx,
                                     "endColumnIndex": col_idx + 1
                                 },
@@ -866,6 +834,10 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
                                 }
                             }
                         })
+        
+        # Apply notes
+        if note_requests:
+            worksheet.spreadsheet.batch_update({"requests": note_requests})
         
         # Apply data validation
         if validation_requests:
@@ -1197,59 +1169,71 @@ def update_readme_sheet_for_FAIRe2NODE(spreadsheet, config):
         # Get the README worksheet
         readme_sheet = spreadsheet.worksheet("README")
         
+        # Get all values from the README sheet
+        all_values = readme_sheet.get_all_values()
+        
+        # Find the positions of key sections
+        timestamp_section_start = None
+        template_params_start = None
+        req_levels_start = None
+        sheets_section_start = None
+        
+        for i, row in enumerate(all_values):
+            if row and row[0] == 'Modification Timestamp:':
+                timestamp_section_start = i
+            elif row and row[0] == 'Template parameters:':
+                template_params_start = i
+            elif row and row[0] == 'Requirement levels:':
+                req_levels_start = i
+            elif row and row[0] == 'Sheets in this Google sheet:':
+                sheets_section_start = i
+        
         # Get all worksheet names except README and Drop-down values
         sheet_names = [ws.title for ws in spreadsheet.worksheets() 
                       if ws.title not in ["README", "Drop-down values"]]
         
-        # Create rows for each sheet (empty timestamp and email cells)
-        readme_timestamp_rows = [[name, '', ''] for name in sheet_names]
+        # Prepare batch requests for updating content and formatting
+        batch_requests = []
         
-        # Add an empty row at the end
-        readme_timestamp_rows.append(['', '', ''])
+        # First, resize the worksheet to a reasonable size
+        batch_requests.append({
+            "updateSheetProperties": {
+                "properties": {
+                    "sheetId": readme_sheet.id,
+                    "gridProperties": {
+                        "rowCount": 60,  # Set to a reasonable number
+                        "columnCount": 10  # Keep the existing column count
+                    }
+                },
+                "fields": "gridProperties.rowCount"
+            }
+        })
         
-        # Update the Modification Timestamp section
-        # First, find where the timestamp section starts
-        all_values = readme_sheet.get_all_values()
-        timestamp_section_start = None
-        for i, row in enumerate(all_values):
-            if row and row[0] == 'Modification Timestamp:':
-                timestamp_section_start = i
-                break
-        
+        # 1. Change "Modification Timestamp:" to "Sheets in this Google Sheet:"
         if timestamp_section_start is not None:
-            # Create the new timestamp section
-            timestamp_section = [
-                ['Modification Timestamp:'],
-                ['Sheet Name', 'Timestamp', 'Email']
-            ] + readme_timestamp_rows
-            
-            # Prepare batch requests for both updating content and formatting
-            batch_requests = []
-            
-            # 1. Update the timestamp section content
             batch_requests.append({
                 "updateCells": {
                     "range": {
                         "sheetId": readme_sheet.id,
                         "startRowIndex": timestamp_section_start,
-                        "endRowIndex": timestamp_section_start + len(timestamp_section),
+                        "endRowIndex": timestamp_section_start + 1,
                         "startColumnIndex": 0,
-                        "endColumnIndex": 3
+                        "endColumnIndex": 1
                     },
-                    "rows": [{"values": [{"userEnteredValue": {"stringValue": cell}} for cell in row]} for row in timestamp_section],
+                    "rows": [{"values": [{"userEnteredValue": {"stringValue": "Sheets in this Google Sheet:"}}]}],
                     "fields": "userEnteredValue"
                 }
             })
             
-            # 2. Format the header row (bold)
+            # Format the header row (bold)
             batch_requests.append({
                 "repeatCell": {
                     "range": {
                         "sheetId": readme_sheet.id,
-                        "startRowIndex": timestamp_section_start + 1,
-                        "endRowIndex": timestamp_section_start + 2,
+                        "startRowIndex": timestamp_section_start,
+                        "endRowIndex": timestamp_section_start + 1,
                         "startColumnIndex": 0,
-                        "endColumnIndex": 3
+                        "endColumnIndex": 1
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -1262,15 +1246,301 @@ def update_readme_sheet_for_FAIRe2NODE(spreadsheet, config):
                 }
             })
             
-            # Execute batch requests with rate limit handling
-            try:
-                spreadsheet.batch_update({"requests": batch_requests})
-            except gspread.exceptions.APIError as e:
-                if "429" in str(e):  # Rate limit error
-                    time.sleep(60)
-                    spreadsheet.batch_update({"requests": batch_requests})
-                else:
-                    raise
+            # Add the "Sheet Name Timestamp Email" header row
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": timestamp_section_start + 1,
+                        "endRowIndex": timestamp_section_start + 2,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 3
+                    },
+                    "rows": [{"values": [
+                        {"userEnteredValue": {"stringValue": "Sheet Name"}},
+                        {"userEnteredValue": {"stringValue": "Timestamp"}},
+                        {"userEnteredValue": {"stringValue": "Email"}}
+                    ]}],
+                    "fields": "userEnteredValue"
+                }
+            })
+            
+            # Create rows for the sheet list with empty cells for timestamp and email
+            sheet_list_rows = []
+            for name in sheet_names:
+                sheet_list_rows.append([name, "", ""])
+            
+            # Add an empty row at the end of the sheet list
+            sheet_list_rows.append(["", "", ""])
+            
+            # Update the sheet list (starting from row after the header)
+            sheet_rows_data = []
+            for row in sheet_list_rows:
+                sheet_row_data = {"values": [
+                    {"userEnteredValue": {"stringValue": ""}},
+                    {"userEnteredValue": {"stringValue": ""}},
+                    {"userEnteredValue": {"stringValue": ""}}
+                ]}
+                
+                # Safely set values for each column
+                if len(row) > 0:
+                    sheet_row_data["values"][0]["userEnteredValue"]["stringValue"] = str(row[0])
+                if len(row) > 1:
+                    sheet_row_data["values"][1]["userEnteredValue"]["stringValue"] = str(row[1])
+                if len(row) > 2:
+                    sheet_row_data["values"][2]["userEnteredValue"]["stringValue"] = str(row[2])
+                
+                sheet_rows_data.append(sheet_row_data)
+            
+            # Calculate where Template parameters should start
+            template_params_row = timestamp_section_start + 2 + len(sheet_rows_data)
+            
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": timestamp_section_start + 2,  # +2 to skip header row
+                        "endRowIndex": template_params_row,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 3  # Include all three columns
+                    },
+                    "rows": sheet_rows_data,
+                    "fields": "userEnteredValue"
+                }
+            })
+            
+            # 2. Add "Template Parameters:" after the sheet list
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": template_params_row,
+                        "endRowIndex": template_params_row + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "rows": [{"values": [{"userEnteredValue": {"stringValue": "Template parameters:"}}]}],
+                    "fields": "userEnteredValue"
+                }
+            })
+            
+            # Format the header row (bold)
+            batch_requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": template_params_row,
+                        "endRowIndex": template_params_row + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat.bold"
+                }
+            })
+            
+            # Find the template parameters content
+            template_params_content = []
+            if template_params_start is not None:
+                for i in range(template_params_start + 1, req_levels_start):
+                    if all_values[i] and all_values[i][0]:
+                        template_params_content.append([all_values[i][0]])
+            
+            # Add template parameters content
+            if template_params_content:
+                batch_requests.append({
+                    "updateCells": {
+                        "range": {
+                            "sheetId": readme_sheet.id,
+                            "startRowIndex": template_params_row + 1,
+                            "endRowIndex": template_params_row + 1 + len(template_params_content),
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 1
+                        },
+                        "rows": [{"values": [{"userEnteredValue": {"stringValue": row[0]}}]} for row in template_params_content],
+                        "fields": "userEnteredValue"
+                    }
+                })
+                
+                # Update where requirement levels should start
+                req_levels_row = template_params_row + 1 + len(template_params_content) + 1  # +1 for empty row
+            else:
+                req_levels_row = template_params_row + 1
+            
+            # Add empty row after template parameters
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": req_levels_row - 1,
+                        "endRowIndex": req_levels_row,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "rows": [{"values": [{"userEnteredValue": {"stringValue": ""}}]}],
+                    "fields": "userEnteredValue"
+                }
+            })
+            
+            # 3. Add "Requirement levels:" section
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": req_levels_row,
+                        "endRowIndex": req_levels_row + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "rows": [{"values": [{"userEnteredValue": {"stringValue": "Requirement levels:"}}]}],
+                    "fields": "userEnteredValue"
+                }
+            })
+            
+            # Format the header row (bold)
+            batch_requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": req_levels_row,
+                        "endRowIndex": req_levels_row + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat.bold"
+                }
+            })
+            
+            # Find the requirement levels content
+            req_levels_content = []
+            if req_levels_start is not None:
+                for i in range(req_levels_start + 1, sheets_section_start):
+                    if all_values[i] and all_values[i][0]:
+                        req_levels_content.append([all_values[i][0]])
+            
+            # Add requirement levels content
+            if req_levels_content:
+                batch_requests.append({
+                    "updateCells": {
+                        "range": {
+                            "sheetId": readme_sheet.id,
+                            "startRowIndex": req_levels_row + 1,
+                            "endRowIndex": req_levels_row + 1 + len(req_levels_content),
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 1
+                        },
+                        "rows": [{"values": [{"userEnteredValue": {"stringValue": row[0]}}]} for row in req_levels_content],
+                        "fields": "userEnteredValue"
+                    }
+                })
+                
+                # Update where instructions should start
+                instructions_row = req_levels_row + 1 + len(req_levels_content) + 1  # +1 for empty row
+            else:
+                instructions_row = req_levels_row + 1
+            
+            # Add empty row after requirement levels
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": instructions_row - 1,
+                        "endRowIndex": instructions_row,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "rows": [{"values": [{"userEnteredValue": {"stringValue": ""}}]}],
+                    "fields": "userEnteredValue"
+                }
+            })
+            
+            # 4. Add "Instructions:" section
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": instructions_row,
+                        "endRowIndex": instructions_row + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "rows": [{"values": [{"userEnteredValue": {"stringValue": "Instructions:"}}]}],
+                    "fields": "userEnteredValue"
+                }
+            })
+            
+            # Format the header row (bold)
+            batch_requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": instructions_row,
+                        "endRowIndex": instructions_row + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat.bold"
+                }
+            })
+            
+            # Add instructions content
+            instructions = [
+                ["1. Enter your data into the projectMetadata, sampleMetadata, and experimentRunMetadata sheets."],
+                ["2. If you only have one generic analysisMetadata sheet (meaning you don't have an analysis ready yet) continue to Step 3. If you have analyses ready, skip to Step 4."],
+                ["3. Once you do have analyses ready, copy the generic analysisMetadata sheet for as many analyses as you have, and rename them appropriately to analysisMetadata<analysis_run_name>, and fill in the data."],
+                ["	- When filling in your data, be careful of the following:"],
+                ["	- The 'project_id' MUST be the same as the name of the project_id in the projectMetadata sheet."],
+                ["	- The 'analysis_run_name' MUST be the same as the name of the analysis_run_name in the projectMetadata sheet. If you have multiple analyses, seperate each analysis_run_name with a pipe: gomecc4_16s_p1-2_v2024.10_241122 | gomecc4_16s_p3-6_v2024.10_241122. An analysis can only have one analysis_run_name."],
+                ["  - The 'assay_name' MUST match one of the assay_names in the projectMetadata sheet. Each assay_name must be seperated by a pipe: ssu16sv4v5-emp |ssu18sv9-emp. An analysis can only have one assay_name."],
+                ["4. Fill in the data for you analysisMetadata sheets. Since you specified your analysis_run_names and assay_names in the NOAA_config.yaml file, those fields will auto-fill for you, so you dont have to worry about Step 3."],
+                ["5. Optional: For modification history and data validation (Checks for the requirements in Step 3), copy and paste the Google Apps Script from the README into the Google Sheet"],
+                ["	- In Google Sheets, go to Extensions > Apps Script > Copy and paste the script > Hit Save"],
+                ["6. Ensure all mandatory (M) fields are filled before submission."],
+                ["7. Now your data is ready for submission to NODE and edna2obis!"],
+                ["8. For each sheet, (except for the README and Drop-down values), download them as a TSV file. This is required for NODE and edna2obis submission."],
+                ["	- In Google Sheets, go to File > Download > TSV, for each sheet."],
+                ["9. For NODE Submission, go here: https://www.oceandnaexplorer.org/submit"],
+                ["10. For edna2obis Submission, go here: https://github.com/aomlomics/edna2obis"],
+                ["11. Please don't hesitate to reach out to us with questions or concerns: bayden.willms@noaa.gov"]
+            ]
+            
+            batch_requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": readme_sheet.id,
+                        "startRowIndex": instructions_row + 1,
+                        "endRowIndex": instructions_row + 1 + len(instructions),
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "rows": [{"values": [{"userEnteredValue": {"stringValue": row[0]}}]} for row in instructions],
+                    "fields": "userEnteredValue"
+                }
+            })
+        
+        # Apply all batch requests
+        if batch_requests:
+            readme_sheet.spreadsheet.batch_update({"requests": batch_requests})
             
     except Exception as e:
         raise Exception(f"Error updating README sheet for FAIRe2NODE: {e}")
