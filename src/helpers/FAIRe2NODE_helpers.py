@@ -1447,6 +1447,36 @@ def update_readme_sheet_for_FAIRe2NODE(spreadsheet, config):
                     }
                 })
                 
+                # Add color formatting for requirement level rows
+                color_styles = {
+                    "M": {"red": 0.89, "green": 0.42, "blue": 0.04},  # #E26B0A - Orange
+                    "HR": {"red": 1.0, "green": 0.8, "blue": 0.0},    # #FFCC00 - Yellow
+                    "R": {"red": 1.0, "green": 1.0, "blue": 0.6},     # #FFFF99 - Light yellow
+                    "O": {"red": 0.8, "green": 1.0, "blue": 0.6}      # #CCFF99 - Light green
+                }
+                
+                # Apply color formatting to each requirement level row
+                for i, row in enumerate(req_levels_content):
+                    level = row[0].split('=')[0].strip()
+                    if level in color_styles:
+                        batch_requests.append({
+                            "repeatCell": {
+                                "range": {
+                                    "sheetId": readme_sheet.id,
+                                    "startRowIndex": req_levels_row + 1 + i,
+                                    "endRowIndex": req_levels_row + 2 + i,
+                                    "startColumnIndex": 0,
+                                    "endColumnIndex": 1
+                                },
+                                "cell": {
+                                    "userEnteredFormat": {
+                                        "backgroundColor": color_styles[level]
+                                    }
+                                },
+                                "fields": "userEnteredFormat.backgroundColor"
+                            }
+                        })
+                
                 # Update where instructions should start
                 instructions_row = req_levels_row + 1 + len(req_levels_content) + 1  # +1 for empty row
             else:

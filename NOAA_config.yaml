@@ -2,7 +2,7 @@
 # It is used to set parameters for the FAIRe2NODE run
 
 # Required: Project ID (must match the project_id used in FAIReSheets)
-project_id: "fix_fairenode_bugs"
+project_id: "noaa-aoml-gomecc4"
 
 # Optional: Analysis run names and their corresponding assay names
 # If not provided, a generic analysisMetadata sheet will be created
