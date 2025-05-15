@@ -11,47 +11,12 @@ assay_name:
   - ssu16sv4v5-emp
   - ssu18sv9-emp
 projectMetadata_user:
-  # - expedition_id
-  # - ship_crs_expocode
-  # - woce_sect
-  # - bioproject_accession
+  # - user_defined_project_field_1
+  # - user_defined_project_field_2
+
 sampleMetadata_user:
-  # - ammonium
-  # - ammonium_unit
-  # - carbonate
-  # - carbonate_unit
-  # - hydrogen_ion
-  # - hydrogen_ion_unit
-  # - nitrate_plus_nitrite
-  # - nitrate_plus_nitrite_unit
-  # - omega_arag
-  # - pco2
-  # - pco2_unit
-  # - phosphate
-  # - phosphate_unit
-  # - pressure
-  # - pressure_unit
-  # - silicate
-  # - silicate_unit
-  # - tot_alkalinity
-  # - tot_alkalinity_unit
-  # - transmittance
-  # - serial_number
-  # - line_id
-  # - station_id
-  # - ctd_cast_number
-  # - ctd_bottle_number
-  # - replicate_number
-  # - extract_id
-  # - extract_plate
-  # - extract_well_number
-  # - extract_well_position
-  # - biosample_accession
-  # - organism
-  # - samp_collect_notes
-  # - dna_conc
-  # - dna_conc_unit
-  # - dna_yield
-  # - dna_yield_unit
+  # - user_defined_sample_field_1
+  # - user_defined_sample_field_2
 experimentRunMetadata_user:
-  # - seq_samp_id
+  # - user_defined_experiment_run_field_1
+    
