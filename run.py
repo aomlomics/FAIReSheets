@@ -82,7 +82,7 @@ def main():
         
         # Step 2: Convert to NODE format
         print("\n🔄 Step 2: Converting to NODE format...")
-        FAIRe2NODE(client=client)
+        FAIRe2NODE(client=client, project_id=project_id)
         
         print("\n✨ All done! Your NODE-compatible template is ready!")
         

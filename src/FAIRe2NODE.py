@@ -30,12 +30,13 @@ from src.helpers.FAIRe2NODE_helpers import (
     show_next_steps_page
 )
 
-def FAIRe2NODE(client=None):
+def FAIRe2NODE(client=None, project_id=None):
     """
     Convert FAIReSheets template to NODE format.
     
     Args:
         client (gspread.Client, optional): Pre-authenticated client. If None, will create one.
+        project_id (str, optional): Project ID to use for renaming the spreadsheet.
     """
     # Load environment variables
     load_dotenv()
@@ -66,7 +67,7 @@ def FAIRe2NODE(client=None):
         raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
     
     # Create a progress bar for the entire process
-    pbar = tqdm(total=5, desc="Converting to NODE format", unit="step", position=0, leave=True)
+    pbar = tqdm(total=6, desc="Converting to NODE format", unit="step", position=0, leave=True)
     
     try:
         # Get the worksheets
@@ -109,6 +110,16 @@ def FAIRe2NODE(client=None):
         for analysis_run_name, worksheet in analysis_worksheets.items():
             add_noaa_fields_to_analysis_metadata(worksheet, noaa_analysis_fields, config, analysis_run_name)
         update_readme_sheet_for_FAIRe2NODE(spreadsheet, config)
+        pbar.update(1)
+        
+        # Part 6: Rename the spreadsheet
+        pbar.set_description("Renaming spreadsheet")
+        if project_id:
+            new_title = f"FAIRe_NODE_{project_id}"
+            spreadsheet.update_title(new_title)
+            print(f"\n📝 Spreadsheet renamed to: {new_title}")
+        else:
+            print("\n⚠️  No project_id provided. Spreadsheet name unchanged.")
         pbar.update(1)
         
         # Close the progress bar
