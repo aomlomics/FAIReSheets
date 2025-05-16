@@ -69,7 +69,8 @@ def create_project_metadata_sheet(worksheet, full_temp_file_name, input_df, req_
         
         # Also create individual columns for each assay
         for i, name in enumerate(assay_name):
-            col_name = f"assay{i+1}"
+            # Use the assay name as the column name instead of "assay{i+1}"
+            col_name = name
             if col_name not in project_meta_df.columns:
                 project_meta_df[col_name] = ""
             project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', col_name] = name
