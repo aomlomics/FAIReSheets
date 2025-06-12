@@ -6,17 +6,16 @@ req_lev:
 sample_type:
   - Water
 assay_type: metabarcoding
-project_id: noaa-aoml-gomecc4
+project_id: my-project-id
 assay_name:
-  - ssu16sv4v5-emp
-  - ssu18sv9-emp
+  - ssu16sv4v5-parada
+  - ssu18sv9-amaralzettler
 projectMetadata_user:
-  # - user_defined_project_field_1
-  # - user_defined_project_field_2
-
+  # - user_defined_project_term_1
+  # - user_defined_project_term_2
 sampleMetadata_user:
-  # - user_defined_sample_field_1
-  # - user_defined_sample_field_2
+  # - user_defined_sample_term_1
+  # - user_defined_sample_term_2
 experimentRunMetadata_user:
-  # - user_defined_experiment_run_field_1
-    
+  # - user_defined_experiment_run_term_1
+  # - user_defined_experiment_run_term_2
