@@ -148,7 +148,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     spreadsheet.update_title(f"FAIRe_{project_id}")
     
     # Set input files
-    FAIRe_checklist_ver = 'v1.0'
+    FAIRe_checklist_ver = 'v2.0'
     input_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}.xlsx'
     sheet_name = 'checklist'
     
