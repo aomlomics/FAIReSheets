@@ -149,7 +149,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     
     # Set input files
     FAIRe_checklist_ver = 'v2.0'
-    input_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}.xlsx'
+    input_file_name = f'FAIRe_NOAA_checklist_{FAIRe_checklist_ver}.xlsx'
     sheet_name = 'checklist'
     
     # Set the file paths correctly
@@ -166,7 +166,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         raise FileNotFoundError(f"Could not find input file {input_file_path}. Please ensure it is in the specified directory.")
     
     # Full template file name
-    full_temp_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}_FULLtemplate.xlsx'
+    full_temp_file_name = 'FAIRe_checklist_v1.0_FULLtemplate.xlsx'
     if input_dir:
         full_temp_file_path = os.path.join(input_dir, full_temp_file_name)
     else:

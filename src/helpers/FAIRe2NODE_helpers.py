@@ -101,7 +101,7 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
         import pandas as pd
         
         noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
-                                         'input', 'FAIRe_NOAA_checklist_v1.0.xlsx')
+                                         'input', 'FAIRe_NOAA_checklist_v2.0.xlsx')
         
         # Read the checklist sheet
         checklist_df = pd.read_excel(noaa_checklist_path, sheet_name='checklist')
@@ -895,12 +895,23 @@ def create_analysis_metadata_sheets(spreadsheet, config):
         # Dictionary to store created worksheets
         analysis_worksheets = {}
         
-        # If no analysis runs are specified, create a single generic analysisMetadata sheet
-        if not analysis_runs:
+        # If no analysis runs are specified, or only the placeholder exists, create a single generic analysisMetadata sheet
+        if not analysis_runs or "analysisMetadata_<analysis_run_name>" in analysis_runs:
             sheet_name = "analysisMetadata_<analysis_run_name>"
             try:
-                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
-                analysis_worksheets[sheet_name] = worksheet
+                # Check if a sheet with this name already exists
+                existing_sheet = None
+                try:
+                    existing_sheet = spreadsheet.worksheet(sheet_name)
+                except gspread.exceptions.WorksheetNotFound:
+                    pass  # Sheet doesn't exist, which is fine
+
+                if not existing_sheet:
+                    worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
+                    analysis_worksheets[sheet_name] = worksheet
+                else:
+                    analysis_worksheets[sheet_name] = existing_sheet
+
             except gspread.exceptions.APIError as e:
                 if "429" in str(e):  # Rate limit error
                     time.sleep(60)
@@ -911,7 +922,11 @@ def create_analysis_metadata_sheets(spreadsheet, config):
         else:
             # Create a sheet for each analysis run name
             for analysis_run_name in analysis_runs:
-                sheet_name = f"analysisMetadata_{analysis_run_name}"
+                # If the run name is the placeholder, use it directly. Otherwise, prepend the prefix.
+                if analysis_run_name == "analysisMetadata_<analysis_run_name>":
+                    sheet_name = analysis_run_name
+                else:
+                    sheet_name = f"analysisMetadata_{analysis_run_name}"
                 try:
                     worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=200, cols=100)
                     analysis_worksheets[analysis_run_name] = worksheet
