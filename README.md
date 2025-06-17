@@ -364,6 +364,10 @@ function onEdit(e) {
       }
     }
   });
+  var font = "Arial"; // Set your desired font
+  var fontSize = 10;  // Set your desired font size
+  range.setFontFamily(font);
+  range.setFontSize(fontSize);
 }
 
 // Helper function to find a cell containing a specific value
