@@ -101,7 +101,7 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
         import pandas as pd
         
         noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
-                                         'input', 'FAIRe_NOAA_checklist_v2.0.xlsx')
+                                         'input', 'FAIRe_NOAA_checklist_v1.0.2.xlsx')
         
         # Read the checklist sheet
         checklist_df = pd.read_excel(noaa_checklist_path, sheet_name='checklist')
