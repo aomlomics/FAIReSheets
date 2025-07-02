@@ -62,7 +62,7 @@ def FAIRe2NODE(client=None, project_id=None):
         raise Exception(f"Error reading NOAA config file: {e}")
     
     # Get NOAA checklist path
-    noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'input', 'FAIRe_NOAA_checklist_v2.0.xlsx')
+    noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'input', 'FAIRe_NOAA_checklist_v1.0.2.xlsx')
     if not os.path.exists(noaa_checklist_path):
         raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
     
