@@ -1,9 +1,8 @@
-# FAIRe2ODE
-
 <div align="center">
-  <img src="src/helpers/FAIRe2ODE_README_graphic.PNG" alt="FAIRe2ODE Logo" width="400">
+  <img src="src/helpers/banner_faire2ode.png" alt="FAIRe2ODE Banner" width="800">
 </div>
 
+## Introduction
 FAIRe2ODE converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to the Ocean DNA Explorer ([ODE](https://www.oceandnaexplorer.org/)) input format. This code generates the metadata templates, which, once filled with data, are ready for ODE submission. Additionally, once your data is in ODE format you can use [edna2obis](https://github.com/aomlomics/edna2obis), for [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/) submission. 
 
 If you are looking for FAIReSheets / which is the more generic version of this script, click [here](https://github.com/aomlomics/FAIReSheets). FAIRe is a collaborative effort in the eDNA research field to standardize its complicated data and metadata. FAIReSheets replicates the template creation from the [FAIRe-ator Repository](https://github.com/FAIR-eDNA/FAIRe-ator/tree/main) from Dr. Miwa Takahashi and Dr. Stephen Formel, except FAIReSheets outputs the template to Google Sheets rather than a Microsoft Excel spreadsheet. 
