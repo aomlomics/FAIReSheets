@@ -115,7 +115,7 @@ def FAIRe2NODE(client=None, project_id=None):
         # Part 6: Rename the spreadsheet
         pbar.set_description("Renaming spreadsheet")
         if project_id:
-            new_title = f"FAIRe_NODE_{project_id}"
+            new_title = f"FAIRe_ODE_{project_id}"
             spreadsheet.update_title(new_title)
             print(f"\n📝 Spreadsheet renamed to: {new_title}")
         else:
