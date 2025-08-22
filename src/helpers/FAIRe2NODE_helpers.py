@@ -1,6 +1,6 @@
 """
-Module for FAIRe2NODE helper functions.
-These functions support the conversion of FAIReSheets templates to NODE format.
+Module for FAIRe2ODE helper functions.
+These functions support the conversion of FAIReSheets templates to ODE format.
 """
 
 import pandas as pd
@@ -1561,10 +1561,10 @@ def update_readme_sheet_for_FAIRe2NODE(spreadsheet, config):
                 ["5. Optional: For modification history and data validation (Checks for the requirements in Step 3), copy and paste the Google Apps Script from the README into the Google Sheet"],
                 ["	- In Google Sheets, go to Extensions > Apps Script > Copy and paste the script > Hit Save"],
                 ["6. Ensure all mandatory (M) fields are filled before submission."],
-                ["7. Now your data is ready for submission to NODE and edna2obis!"],
-                ["8. For each sheet, (except for the README and Drop-down values), download them as a TSV file. This is required for NODE and edna2obis submission."],
+                ["7. Now your data is ready for submission to ODE and edna2obis!"],
+                ["8. For each sheet, (except for the README and Drop-down values), download them as a TSV file. This is required for ODE and edna2obis submission."],
                 ["	- In Google Sheets, go to File > Download > TSV, for each sheet."],
-                ["9. For NODE Submission, go here: https://www.oceandnaexplorer.org/submit"],
+                ["9. For ODE Submission, go here: https://www.oceandnaexplorer.org/submit"],
                 ["10. For edna2obis Submission, go here: https://github.com/aomlomics/edna2obis"],
                 ["11. Please don't hesitate to reach out to us with questions or concerns: bayden.willms@noaa.gov"]
             ]

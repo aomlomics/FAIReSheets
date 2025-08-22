@@ -51,7 +51,7 @@ Anaconda is a scientific Python distribution that handles package dependencies a
 
    **Option A: Using Command Prompt (Windows)**
    - Open Command Prompt (not PowerShell)
-   - Navigate to the FAIReSheets directory
+   - Navigate to the FAIRe2ODE directory
    - Run the following commands:
      ```bash
      conda init cmd.exe
@@ -60,7 +60,7 @@ Anaconda is a scientific Python distribution that handles package dependencies a
    - Then run:
      ```bash
      conda env create -f environment.yml 
-     conda activate fairesheets
+     conda activate faire2ode
      ```
 
    **Option B: Using Anaconda Prompt (Windows)**
@@ -69,7 +69,7 @@ Anaconda is a scientific Python distribution that handles package dependencies a
    - Run:
      ```bash
      conda env create -f environment.yml 
-     conda activate fairesheets
+     conda activate faire2ode
      ```
 
 #### Option 2: Install Dependencies with pip (Recommended for programmers / code savvy individuals)

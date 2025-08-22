@@ -23,13 +23,13 @@ print("\n===================================================")
 print("Welcome to FAIReSheets - FAIR eDNA Template Generator")
 print("===================================================")
 print("This tool generates FAIR eDNA data templates in Google Sheets")
-print("and converts them to NODE format.")
+print("and converts them to ODE format.")
 print("First-time users will be prompted to authenticate with Google.")
 print("NOTE: You must be on the approved users list to use this tool.")
 print("To request access, email bayden.willms@noaa.gov\n")
 
 def main():
-    """Main function to run FAIReSheets followed by FAIRe2NODE."""
+    """Main function to run FAIReSheets followed by FAIRe2ODE."""
     # Load environment variables
     load_dotenv()
     
@@ -80,11 +80,11 @@ def main():
             client=client
         )
         
-        # Step 2: Convert to NODE format
-        print("\n🔄 Step 2: Converting to NODE format...")
+        # Step 2: Convert to ODE format
+        print("\n🔄 Step 2: Converting to ODE format...")
         FAIRe2NODE(client=client, project_id=project_id)
         
-        print("\n✨ All done! Your NODE-compatible template is ready!")
+        print("\n✨ All done! Your Ocean DNA Explorer-compatible template is ready!")
         
     except Exception as e:
         print(f"\n❌ Error: {e}")

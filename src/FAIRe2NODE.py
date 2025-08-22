@@ -1,8 +1,8 @@
 """
-FAIRe2NODE - Converts FAIReSheets templates to NODE format.
+FAIRe2NODE - Converts FAIReSheets templates to Ocean DNA Explorer input format.
 
 This script takes a FAIReSheets-generated Google Sheet and modifies it to be compatible
-with NODE submission requirements. It removes bioinformatics fields and adds NOAA-specific
+with ODE submission requirements. It removes bioinformatics fields and adds NOAA-specific
 fields as needed.
 """
 
@@ -32,7 +32,7 @@ from src.helpers.FAIRe2NODE_helpers import (
 
 def FAIRe2NODE(client=None, project_id=None):
     """
-    Convert FAIReSheets template to NODE format.
+    Convert FAIReSheets template to ODE format.
     
     Args:
         client (gspread.Client, optional): Pre-authenticated client. If None, will create one.
@@ -67,7 +67,7 @@ def FAIRe2NODE(client=None, project_id=None):
         raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
     
     # Create a progress bar for the entire process
-    pbar = tqdm(total=6, desc="Converting to NODE format", unit="step", position=0, leave=True)
+    pbar = tqdm(total=6, desc="Converting to ODE format", unit="step", position=0, leave=True)
     
     try:
         # Get the worksheets
