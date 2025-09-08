@@ -6,7 +6,7 @@ req_lev:
 sample_type:
   - Water
 assay_type: metabarcoding
-project_id: my-project-id
+project_id: noaa-aoml-gomecc4
 assay_name:
   - ssu16sv4v5-parada
   - ssu18sv9-amaralzettler

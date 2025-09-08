@@ -19,6 +19,7 @@ from src.helpers.FAIRe2NODE_helpers import (
     get_bioinformatics_fields,
     remove_bioinfo_fields_from_project_metadata,
     remove_bioinfo_fields_from_experiment_metadata,
+    remove_terms_from_experiment_metadata,
     get_noaa_fields,
     add_noaa_fields_to_project_metadata,
     add_noaa_fields_to_experiment_metadata,
@@ -92,6 +93,16 @@ def FAIRe2NODE(client=None, project_id=None):
         
         noaa_experiment_fields = get_noaa_fields(noaa_checklist_path, "NOAAexperimentRunMetadata")
         add_noaa_fields_to_experiment_metadata(experiment_metadata, noaa_experiment_fields)
+
+        # NOAA-specific denylist: remove unwanted experimentRunMetadata terms if present
+        remove_terms_from_experiment_metadata(
+            experiment_metadata,
+            terms_to_remove=[
+                'output_read_count',
+                'output_otu_num',
+                'otu_num_tax_assigned'
+            ]
+        )
         pbar.update(1)
         
         # Part 3: Remove taxa sheets
@@ -115,7 +126,7 @@ def FAIRe2NODE(client=None, project_id=None):
         # Part 6: Rename the spreadsheet
         pbar.set_description("Renaming spreadsheet")
         if project_id:
-            new_title = f"FAIRe_ODE_{project_id}"
+            new_title = f"FAIRe-ODE_{project_id}"
             spreadsheet.update_title(new_title)
             print(f"\n📝 Spreadsheet renamed to: {new_title}")
         else:

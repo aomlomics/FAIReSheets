@@ -208,6 +208,59 @@ def remove_bioinfo_fields_from_experiment_metadata(worksheet, bioinfo_fields):
         raise Exception(f"Error removing bioinformatics fields from experimentRunMetadata: {e}") 
     
 
+# Generic removal by explicit term names (deny list)
+# These fields ARE in the generic FAIRe checklist, but NOT in NOAA Checklist
+# This is a hardcoded solution to remove these terms: output_read_count, output_otu_num, otu_num_tax_assigned
+# Because these fields are calculated by the Ocean DNA Explorer
+def remove_terms_from_experiment_metadata(worksheet, terms_to_remove):
+    """
+    Remove specified term_name columns from experimentRunMetadata sheet if present.
+    Safe no-op when terms are absent.
+    
+    Args:
+        worksheet (gspread.Worksheet): The experimentRunMetadata worksheet
+        terms_to_remove (list[str]): Term names (column headers) to remove
+    """
+    try:
+        if not terms_to_remove:
+            return
+        # Get all data from the worksheet
+        data = worksheet.get_all_values()
+        if not data or len(data) < 3:
+            return
+        # Row 3 (index 2) contains term names in this template
+        term_row_index = 2
+        deny_set = set(terms_to_remove)
+        cols_to_delete = []
+        for i, term in enumerate(data[term_row_index]):
+            if term in deny_set:
+                cols_to_delete.append(i + 1)  # 1-based for Sheets API
+        if not cols_to_delete:
+            return
+        # Prepare batch delete requests from right to left
+        batch_requests = []
+        for col_idx in sorted(cols_to_delete, reverse=True):
+            batch_requests.append({
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": col_idx - 1,  # 0-based
+                        "endIndex": col_idx
+                    }
+                }
+            })
+        try:
+            worksheet.spreadsheet.batch_update({'requests': batch_requests})
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e):  # Rate limit error
+                time.sleep(60)
+                worksheet.spreadsheet.batch_update({'requests': batch_requests})
+            else:
+                raise
+    except Exception as e:
+        raise Exception(f"Error removing specified terms from experimentRunMetadata: {e}")
+
 # Part 2: Add NOAA fields to the sheets
 
 def get_noaa_fields(noaa_checklist_path, sheet_type):

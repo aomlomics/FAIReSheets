@@ -1,5 +1,5 @@
-# This config file is for FAIRe2NODE (to be run after FAIReSheets)
-# It is used to set parameters for the FAIRe2NODE run
+# This config file is for FAIRe2ODE (to be run after FAIReSheets)
+# It is used to set parameters for the FAIRe2ODE run
 
 # Required: Project ID (must match the project_id used in FAIReSheets)
 project_id: "noaa-aoml-gomecc4"
