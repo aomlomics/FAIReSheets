@@ -1,6 +1,5 @@
 """
-Module for FAIRe2ODE helper functions.
-These functions support the conversion of FAIReSheets templates to ODE format.
+Module for FAIReSheets' NOAA-specific formatting helper functions.
 """
 
 import pandas as pd

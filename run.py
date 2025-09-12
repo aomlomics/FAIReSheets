@@ -29,7 +29,7 @@ print("NOTE: You must be on the approved users list to use this tool.")
 print("To request access, email bayden.willms@noaa.gov\n")
 
 def main():
-    """Main function to run FAIReSheets followed by FAIRe2ODE."""
+    """Main function to run FAIReSheets."""
     # Load environment variables
     load_dotenv()
     
@@ -49,12 +49,18 @@ def main():
         return
 
     try:
-        # Load the configuration
+        # Load the configuration files
         config_path = os.path.join(current_dir, 'config.yaml')
+        noaa_config_path = os.path.join(current_dir, 'NOAA_config.yaml')
+
         with open(config_path, 'r') as file:
             config = yaml.safe_load(file)
-            
+        
+        with open(noaa_config_path, 'r') as file:
+            noaa_config = yaml.safe_load(file)
+
         # Get parameters from config
+        run_noaa_formatting = noaa_config.get('run_noaa_formatting', False)
         project_id = config.get('project_id', 'default_project')
         req_lev = config.get('req_lev', ['M', 'HR', 'R', 'O'])
         sample_type = config.get('sample_type', None)
@@ -80,11 +86,14 @@ def main():
             client=client
         )
         
-        # Step 2: Convert to ODE format
-        print("\n🔄 Step 2: Converting to ODE format...")
-        FAIRe2NODE(client=client, project_id=project_id)
-        
-        print("\n✨ All done! Your Ocean DNA Explorer-compatible template is ready!")
+        if run_noaa_formatting:
+            # Step 2: Convert to ODE format
+            print("\n🔄 Step 2: Converting to ODE format...")
+            FAIRe2NODE(client=client, project_id=project_id)
+            
+            print("\n✨ All done! Your Ocean DNA Explorer-compatible template is ready!")
+        else:
+            print("\n✨ All done! Your FAIReSheets template is ready!")
         
     except Exception as e:
         print(f"\n❌ Error: {e}")

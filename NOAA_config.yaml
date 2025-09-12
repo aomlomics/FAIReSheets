@@ -1,5 +1,8 @@
-# This config file is for FAIRe2ODE (to be run after FAIReSheets)
-# It is used to set parameters for the FAIRe2ODE run
+run_noaa_formatting: true
+# This config file is for FAIReSheets' NOAA-specific formatting.
+# It is used to set parameters for the formatting run.
+# NOAA's FAIRe metadata templates are the input format for the Ocean DNA Explorer,
+# as well as the input format for edna2obis, which helps with submission to OBIS and GBIF.
 
 # Required: Project ID (must match the project_id used in FAIReSheets)
 project_id: "noaa-aoml-gomecc4"

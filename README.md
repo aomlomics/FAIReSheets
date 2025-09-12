@@ -1,205 +1,87 @@
 <div align="center">
-  <img src="src/helpers/banner_faire2ode.png" alt="FAIRe2ODE Banner" width="800">
+  <img src="src/helpers/banner_faire2ode.png" alt="FAIReSheets Banner" width="800">
 </div>
 
-## Introduction
-FAIRe2ODE converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to the Ocean DNA Explorer ([ODE](https://www.oceandnaexplorer.org/)) input format. This code generates the metadata templates, which, once filled with data, are ready for ODE submission. Additionally, once your data is in ODE format you can use [edna2obis](https://github.com/aomlomics/edna2obis), for [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/) submission. 
+FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to the Ocean DNA Explorer ([ODE](https://www.oceandnaexplorer.org/)) input format. This code generates the metadata templates, which, once filled with data, are ready for ODE submission. Additionally, once your data is in ODE format you can use [edna2obis](https://github.com/aomlomics/edna2obis), for [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/) submission. 
 
-If you are looking for FAIReSheets / which is the more generic version of this script, click [here](https://github.com/aomlomics/FAIReSheets). FAIRe is a collaborative effort in the eDNA research field to standardize its complicated data and metadata. FAIReSheets replicates the template creation from the [FAIRe-ator Repository](https://github.com/FAIR-eDNA/FAIRe-ator/tree/main) from Dr. Miwa Takahashi and Dr. Stephen Formel, except FAIReSheets outputs the template to Google Sheets rather than a Microsoft Excel spreadsheet. 
+### TLDR
+TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and `NOAA_config.yaml`, run FAIReSheets and follow the authentication workflow.
 
-TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and `NOAA_config.yaml`, run FAIRe2ODE and follow the authentication workflow.
+---
+### Table of Contents
+1. [Prerequisites](#Prerequisites)
+2. [Installation](#Installation)
+3. [Configuration](#Configuration)
+4. [Usage](#Usage)
+5. [Troubleshooting](#Troubleshooting)
+---
 
-```bash
-python run.py 
-```
-
-## Setup
-
-### Access Request (Required)
-Before using FAIRe2ODE, you'll need to request access. This only needs to happen once:
-
-1. Email bayden.willms@noaa.gov
-2. Include your Google account email in the request (the one you'll use to access Google Sheets)
-3. You'll receive an email with a Gist URL to add to your `.env` file and confirmation that you've been added to the user list.
+### Prerequisites
+Before using FAIReSheets, you'll need to request access. This only needs to happen once:
+1. **Request Access**: 
+   - Email bayden.willms@noaa.gov with the subject "FAIReSheets Access Request".
+   - Include the email address associated with your Google account.
+2. **Receive Credentials**: 
+   - Once approved, you'll receive an email with a link to a private Git Gist. This Gist contains the `client_secrets.json` and `token.json` files needed for authentication.
 
 ### Installation
-This project requires Python and a few additional Python libraries. We strongly recommend using the Anaconda method for installation as it handles dependencies automatically and avoids many common issues.
-
-#### Clone the Repository to your Computer:
-First, install Git to download the project:
-- [Download and install Git](https://git-scm.com/downloads)
-  - During installation, select "Git from the command line and also from 3rd-party software"
-  - We recommend using the "bundled OpenSSH" option during installation
-
-Then, download the code respository:
-```bash
-git clone -b FAIRe2ODE https://github.com/aomlomics/FAIRe2ODE.git
-cd FAIRe2ODE
-```
-
-Now, let's setup the Python dependencies using one of the two options.
-
-#### Option 1: Install Dependencies with Anaconda **(HIGHLY RECOMMENDED)**
-Anaconda is a scientific Python distribution that handles package dependencies and environment management automatically, helping users avoid common installation issues:
-
-1. [Download and install Anaconda](https://docs.anaconda.com/anaconda/install/)
-   - **IMPORTANT**: During installation, check the box that says "Add Anaconda to PATH"
-   - This ensures Anaconda commands work from any directory
-   - If you don't check this box, you'll be limited to using only the Anaconda Prompt
-
-2. After installation, you have two options for running commands:
-
-   **Option A: Using Command Prompt (Windows)**
-   - Open Command Prompt (not PowerShell)
-   - Navigate to the FAIRe2ODE directory
-   - Run the following commands:
-     ```bash
-     conda init cmd.exe
-     ```
-   - **IMPORTANT**: Close and reopen Command Prompt after running conda init
-   - Then run:
-     ```bash
-     conda env create -f environment.yml 
-     conda activate faire2ode
-     ```
-
-   **Option B: Using Anaconda Prompt (Windows)**
-   - Open Anaconda Prompt
-   - Navigate to the FAIReSheets directory
-   - Run:
-     ```bash
-     conda env create -f environment.yml 
-     conda activate faire2ode
-     ```
-
-#### Option 2: Install Dependencies with pip (Recommended for programmers / code savvy individuals)
-If you prefer not to use Anaconda, you can use pip (Python's package installer):
-
-1. [Download and install Python](https://www.python.org/downloads/) 
-   - **IMPORTANT**: During installation, check the box that says "Add Python to PATH"
-   - This ensures Python and pip commands work from any directory
-   - Pip will not work if Python is not added to PATH
-
-2. Open Command Prompt (Windows) or Terminal (Mac/Linux)
-3. Navigate to the FAIReSheets directory
-4. Install the required packages:
+1. **Clone the Repository**:
    ```bash
-   pip install -r requirements.txt
+   git clone https://github.com/aomlomics/FAIRe2ODE.git
+   cd FAIRe2ODE
    ```
-   If you see errors, try:
-   ```bash
-   python -m pip install -r requirements.txt
-   ```
+2. **Set up the Environment**:
+   - Install Conda if you don't have it already.
+   - Create and activate the Conda environment:
+     ```bash
+     conda env create -f environment.yml
+     conda activate FAIRe
+     ```
+3. **Download Credentials**:
+   - Download the `client_secrets.json` and `token.json` files from the Git Gist and place them in the root of the FAIReSheets directory.
 
-## Set Parameters
+### Configuration
+1. **Create `.env` file**:
+   - In the FAIReSheets directory, create a `.env` file. You can do this by renaming the `example.env` file to `.env`.
+2. **Configure `.env` file**:
+   - Open the `.env` file and add the following, replacing the placeholder text with your actual information:
+     ```
+     SPREADSHEET_ID=your_spreadsheet_id_here
+     GIST_URL=your_gist_url_here
+     ```
+   - `SPREADSHEET_ID`: This is the ID of the Google Sheet you want to populate. You can find it in the URL of your Google Sheet: `https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit`.
+   - `GIST_URL`: The GIST_URL will be sent to you when you've been granted access to FAIReSheets (see first section).
+3. **Configure `config.yaml` and `NOAA_config.yaml`**:
+   - Open `config.yaml` and `NOAA_config.yaml` to set your project-specific parameters.
+   - Comments in the files explain what each parameter does.
 
-### Google Sheet Setup
-1. Create a new, empty Google Sheet in your account
-2. Copy the Spreadsheet ID from the URL:
-   - The ID is the long string between `/d/` and `/edit` in the URL
-   - For example: `https://docs.google.com/spreadsheets/d/1ABC123XYZ/edit`
-   - The ID would be `1ABC123XYZ`
-
-### Configure .env File
-`.env` files store sensitive variables necessary for running the script. If these variables are properly stored in the `.env` file, they will not be visible on GitHub if you push your local repository publically. Run the script once and it will create a template `.env` file:
+### Usage
+Run FAIReSheets from the root project directory using: 
 ```bash
 python run.py
 ```
+This will:
+1. Generate the FAIRe eDNA data checklist in your specified Google Sheet.
+2. If `run_noaa_formatting` is `true` in `NOAA_config.yaml`, it will then format the sheet for the Ocean DNA Explorer.
 
-Then edit the `.env` file to add:
-1. Your Google Sheet ID
-2. The Gist URL provided to you by email
+#### First-Time Authentication
+When you run FAIReSheets for the first time, the following will happen:
+1. A browser window will open, prompting you to log in to your Google account. 
+   - **Important**: Use the same Google account you provided when requesting access.
+2. After logging in, you'll be asked to grant permission to FAIReSheets to access your Google Sheets
+3. Once you grant permission, a `token.json` file will be created in the project directory. This file stores your authentication token, so you won't have to log in every time you run the tool.
 
-The `.env` file should look like:
-```
-SPREADSHEET_ID=your_spreadsheet_id_here
-GIST_URL=https://gist.THIS_IS_AN_EXAMPLE.com/user/hash/raw/file.json
-```
-The GIST_URL will be sent to you when you've been granted access to FAIRe2ODE (see first section).
-
-### Set Parameters in config.yaml
-Edit the `config.yaml` file to set your run parameters. Here you can specify things like project name, assays used, metabarcoding vs targeted approach, etc. 
-
-Refer to the `config_TEMPLATE.yaml` for information on all the available options for input parameters. Just remember, `config.yaml` is the file actually used by the code.
-
-## Run
-
-Before running FAIRe2NODE, configure the `config.yaml` and `NOAA_config.yaml` files given your desired parameters. Please refer to the `config_TEMPLATE.yaml` for the available parameter options. These parameters determine the structure of your generated FAIRe template. You can also specify additional terms to add if you have relevant fields in your data that are not included in the FAIRe template. Just remember, `config_TEMPLATE.yaml` is just for you to know all the parameter options, and `config.yaml` and `NOAA_config.yaml` is what the code actually uses.
-
-Run FAIRe2ODE from the root project directory using: 
-```bash
-python run.py
-```
-Or alternatively you can run the `run.py` script in your IDE using the Play button. If you are missing things like a `.env` file, authentication credentials, or your spreadsheet ID to edit, the script will prompt you to add those, and/or create a sample `.env` file for you to edit.
-
-**Please note** that you must run this on your own computer, and **not** on a virtual machine or 
-remote server. This code opens a login page in your web browser, where you sign in to your Google 
-Drive account. If this code is run on a virtual machine, there is no available browser to open that 
-login page.
-
-### Creating a New Spreadsheet
-If you want to generate a new FAIRe template after you've already created one, you have two options:
-
-1. **Option 1: Restore the Google Sheet to blank**
-   - Open your Google Sheet
-   - Click on "File" > "Version history" > "See version history"
-   - Find the version from before you ran FAIReSheets (when the sheet was blank)
-   - Click on that version and select "Restore this version"
-   - Run FAIReSheets again with the same spreadsheet ID
-
-2. **Option 2: Create a new Google Sheet**
-   - Create a new, empty Google Sheet
-   - Copy the new Spreadsheet ID from the URL
-   - Update the `SPREADSHEET_ID` in your `.env` file with the new ID
-   - Run FAIReSheets again
-
-## Run > Authentication
-
-When you run FAIRe2ODE for the first time, the following will happen:
-
-1. The tool will download the authentication credentials from the Git Gist URL sent to you via email
-2. A browser window will open asking you to sign in with your Google account
-3. You'll be asked to grant permission to FAIRe2ODE to access your Google Sheets
-4. After granting permission, the tool will save a token for future use
-5. Future runs won't require reauthentication
-
-If you see a message saying "Google hasn't verified this app", click "Advanced" and then "Go to FAIReSheets (unsafe)" to proceed. This is normal for specialized tools that haven't gone through Google's verification process.
-
-## Important Warnings
-
-### DO NOT Run on Virtual Machines or Remote Servers
-**IMPORTANT**: You must run this on your own computer, and **NOT** on a virtual machine or remote server. This code opens a login page in your web browser, where you sign in to your Google Drive account. If this code is run on a virtual machine, there is no available browser to open that login page.
-
-### Avoid Using MobaXterm or Similar Tools
-If you're using MobaXterm or similar tools that create virtual Linux environments:
-- These tools open in a fake Linux home directory (`/home/<username>`) that doesn't map to a real Windows folder
-- Instead, navigate to a real Windows path like `/drives/c/Users/<username>/Documents` before cloning
-- Avoid cloning into `/home/<username>` since it won't show up in File Explorer
-
-## Troubleshooting
-
-### Anaconda Issues
-- **Problem**: `conda` command not recognized in Command Prompt
-  - **Solution**: Make sure you checked "Add Anaconda to PATH" during installation
-  - If you didn't, reinstall Anaconda and check this option
-
-- **Problem**: `conda activate` fails with "conda init" message
-  - **Solution**: Run `conda init cmd.exe` in Command Prompt, then close and reopen Command Prompt
-
-- **Problem**: Python version mismatch (e.g., you installed Anaconda with Python 3.12 but environment.yml requires 3.9)
-  - **Solution**: This is okay! Conda will create an environment with Python 3.9 as specified in the environment.yml file
-
-### Git Issues
-- **Problem**: `git` command not recognized
-  - **Solution**: Make sure Git is installed system-wide from git-scm.com
-  - During installation, select "Git from the command line and also from 3rd-party software"
-  - I highly recommend using Visual Studio Code, it also has a UI for using git
-
-### Google Sheet Issues
-- **Problem**: Can't edit the Google Sheet
-  - **Solution**: Make sure you're using the Google account email you provided when requesting access, and that you checked the boxes to allow FAIRe2ODE to edit Google Sheets in your Google Drive.
-- **Problem**: Errors when running FAIRe2ODE
-  - **Solution**: Make sure the Google Sheet that FAIRe2ODE is editing is **empty**. You can use Google Drive's built in Restore History button before running FAIRe2ODE again, or, make a new Google Sheet and replace the Spreadsheet ID in the `.env` file. 
+### Troubleshooting
+- **Problem**: "User is not on the approved list"
+  - **Solution**: You need to be on the approved users list to run this tool. Email bayden.willms@noaa.gov to request access.
+- **Problem**: Authentication errors (e.g., "invalid_grant")
+  - **Solution**: Delete the `token.json` file and run the tool again. This will re-trigger the authentication process.
+  - **Solution**: Make sure you're using the Google account email you provided when requesting access, and that you checked the boxes to allow FAIReSheets to edit Google Sheets in your Google Drive.
+- **Problem**: Errors when running FAIReSheets
+  - **Solution**: Make sure the Google Sheet that FAIReSheets is editing is **empty**. You can use Google Drive's built in Restore History button before running FAIReSheets again, or, make a new Google Sheet and replace the Spreadsheet ID in the `.env` file. 
+- **Problem**: Missing `client_secrets.json` or `token.json`
+  - **Solution**: Make sure you've downloaded these files from the Git Gist and placed them in the root of the project directory.
+- **Problem**: `config.yaml` or `NOAA_config.yaml` errors
 
 ## Optional (recommended)
 
