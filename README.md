@@ -2,10 +2,14 @@
   <img src="src/helpers/banner_fairesheets.png" alt="FAIReSheets Banner" width="800">
 </div>
 
-FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to the Ocean DNA Explorer ([ODE](https://www.oceandnaexplorer.org/)) input format. This code generates the metadata templates, which, once filled with data, are ready for ODE submission. Additionally, once your data is in ODE format you can use [edna2obis](https://github.com/aomlomics/edna2obis), for [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/) submission. 
+FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to customizable Google Sheets templates. FAIReSheets can be run in one of 2 modes:
+1. **FAIRe eDNA:** Generate FAIRe eDNA data templates from the FAIRe checklist
+2. **ODE-ready:** Generate ODE-ready (NOAA) data templates, ready for submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/), and can be used as input to [edna2obis](https://github.com/aomlomics/edna2obis), a data pipeline for submission to [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/).
 
-### TLDR
-TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with your Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and `NOAA_config.yaml`, run FAIReSheets and follow the authentication workflow.
+NOTE: FAIReSheets generates BLANK templates. You must fill them in with data manually after they're generated.
+
+### Quick Start Summary
+Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with the Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and optionally in `NOAA_config.yaml` if you want ODE-ready templates, follow the authentication workflow (on your browser), and run `python run.py`.
 
 ---
 ### Table of Contents
@@ -20,15 +24,15 @@ TLDR: Email bayden.willms@noaa.gov to be added to the user list and receive the 
 Before using FAIReSheets, you'll need to request access. This only needs to happen once:
 1. **Request Access**: 
    - Email bayden.willms@noaa.gov with the subject "FAIReSheets Access Request".
-   - Include the email address associated with your Google account.
+   - Include the email address associated with your Google account. For NOAA users, use your @noaa.gov email.
 2. **Receive Credentials**: 
-   - Once approved, you'll receive an email with a link to a private Git Gist. This Gist contains the `client_secrets.json` and `token.json` files needed for authentication.
+   - Once approved, you'll receive an email with a link to a private Git Gist. This Gist contains the `client_secrets.json` and `token.json`, which are files needed for authentication.
 
 ### Installation
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/aomlomics/FAIRe2ODE.git
-   cd FAIRe2ODE
+   git clone https://github.com/aomlomics/FAIReSheets.git
+   cd FAIReSheets
    ```
 2. **Set up the Environment**:
    - Install Conda if you don't have it already.
@@ -37,31 +41,46 @@ Before using FAIReSheets, you'll need to request access. This only needs to happ
      conda env create -f environment.yml
      conda activate FAIRe
      ```
-3. **Download Credentials**:
-   - Download the `client_secrets.json` and `token.json` files from the Git Gist and place them in the root of the FAIReSheets directory.
 
 ### Configuration
 1. **Create `.env` file**:
-   - In the FAIReSheets directory, create a `.env` file. You can do this by renaming the `example.env` file to `.env`.
+   - In the FAIReSheets directory, create a `.env` file. Or alternatively, if you run FAIReSheets without having a `.env` file, one will be created for you. Note that you will still need to fill in the Git Gist URL and Spreadsheet ID to that `.env`.
 2. **Configure `.env` file**:
    - Open the `.env` file and add the following, replacing the placeholder text with your actual information:
      ```
      SPREADSHEET_ID=your_spreadsheet_id_here
      GIST_URL=your_gist_url_here
      ```
-   - `SPREADSHEET_ID`: This is the ID of the Google Sheet you want to populate. You can find it in the URL of your Google Sheet: `https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit`.
-   - `GIST_URL`: The GIST_URL will be sent to you when you've been granted access to FAIReSheets (see first section).
-3. **Configure `config.yaml` and `NOAA_config.yaml`**:
-   - Open `config.yaml` and `NOAA_config.yaml` to set your project-specific parameters.
-   - Comments in the files explain what each parameter does.
+   - `SPREADSHEET_ID`: This is the ID of the Google Sheet you want to populate. You can find it in the URL of your Google Sheet, between the **/d/** and **/edit**: `https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit`.
+   - `GIST_URL`: The GIST_URL will be sent to you via email after you've been granted access to FAIReSheets (see first section).
+
+3. **Customize your FAIRe checklist:**
+   - The FAIRe data checklist is designed to be customizable. If you have data fields that are not included in the checklist, you can manually add them into the checklist as User Defined fields, and your changes will be reflected in the templates you generate. We recommend trying your best to align your custom fields with fields in existing eDNA data standards, like Darwin Core or MIXs.
 
 ### Usage
-Run FAIReSheets from the root project directory using: 
+
+FAIReSheets can generate **EITHER** FAIRe eDNA templates, **OR** ODE-ready (NOAA) eDNA templates. See more info in the bullet points below:
+- **FAIRe eDNA:** The default mode of FAIReSheets, this will generate the exact format which the [FAIRe eDNA collaboration](https://fair-edna.github.io/index.html) supports. Parameters for the template are set in the `config.yaml` file. HINT: for users with qPCR data, this is what you want!
+- **ODE-ready:** Generates templates in the format required for submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/), NOAA 'Omics own eDNA data portal. Submission to ODE will unlock your data's potential, with an intuitive user interface, data visualizations, search, API endpoints, and more! These data templates can also be used as input to [edna2obis](https://github.com/aomlomics/edna2obis), a data pipeline for submission to [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/). Parameters for the template are set in the `NOAA_config.yaml` file. HIGHLY RECOMMENDED to any user with metabarcoding / targeted eDNA data!
+
+
+Customize your generated data templates depending on your data:
+ - Open `config.yaml` and `NOAA_config.yaml` to set your project-specific parameters.
+ - Comments in the files explain what each parameter does.
+ - `config.yaml` is for FAIRe eDNA template parameters.
+ - `NOAA_config.yaml` is for ODE-ready template parameters.
+
+If you would like to generate ODE-ready templates, set the `run_noaa_formatting` config parameter to `true`, like this: 
+```bash 
+run_noaa_formatting: true
+```
+
+You are now ready to run the code! Run FAIReSheets from the root project directory using: 
 ```bash
 python run.py
 ```
 This will:
-1. Generate the FAIRe eDNA data checklist in your specified Google Sheet.
+1. Generate the data templates in your specified Google Sheet.
 2. If `run_noaa_formatting` is `true` in `NOAA_config.yaml`, it will then format the sheet for the Ocean DNA Explorer.
 
 #### First-Time Authentication
@@ -78,10 +97,9 @@ When you run FAIReSheets for the first time, the following will happen:
   - **Solution**: Delete the `token.json` file and run the tool again. This will re-trigger the authentication process.
   - **Solution**: Make sure you're using the Google account email you provided when requesting access, and that you checked the boxes to allow FAIReSheets to edit Google Sheets in your Google Drive.
 - **Problem**: Errors when running FAIReSheets
-  - **Solution**: Make sure the Google Sheet that FAIReSheets is editing is **empty**. You can use Google Drive's built in Restore History button before running FAIReSheets again, or, make a new Google Sheet and replace the Spreadsheet ID in the `.env` file. 
+  - **Solution**: Make sure the Google Sheet that FAIReSheets is editing is **EMPTY**. You can use Google Drive's built in Restore History button before running FAIReSheets again, or, make a new Google Sheet and replace the Spreadsheet ID in the `.env` file. 
 - **Problem**: Missing `client_secrets.json` or `token.json`
   - **Solution**: Make sure you've downloaded these files from the Git Gist and placed them in the root of the project directory.
-- **Problem**: `config.yaml` or `NOAA_config.yaml` errors
 
 ## Optional (recommended)
 
