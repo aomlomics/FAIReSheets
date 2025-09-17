@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/helpers/banner_faire2ode.png" alt="FAIReSheets Banner" width="800">
+  <img src="src/helpers/banner_fairesheets.png" alt="FAIReSheets Banner" width="800">
 </div>
 
 FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to the Ocean DNA Explorer ([ODE](https://www.oceandnaexplorer.org/)) input format. This code generates the metadata templates, which, once filled with data, are ready for ODE submission. Additionally, once your data is in ODE format you can use [edna2obis](https://github.com/aomlomics/edna2obis), for [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/) submission. 
