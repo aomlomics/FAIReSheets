@@ -122,7 +122,36 @@ def authenticate():
             print("please email bayden.willms@noaa.gov to request access.")
             print("\nWaiting for browser authentication...")
             
-            credentials = flow.run_local_server(port=0)
+            # Try a few stable localhost ports (helps with corporate proxies and IPv6 issues)
+            credentials = None
+            last_error = None
+            for try_port in [8080, 8888, 8787, 0]:  # 0 = random open port as final fallback
+                try:
+                    credentials = flow.run_local_server(
+                        host="127.0.0.1",
+                        port=try_port,
+                        authorization_prompt_message=(
+                            "Your browser will open to authorize Google Sheets/Drive access."
+                        ),
+                        success_message=(
+                            "Authentication complete. You may close this window and return to the app."
+                        ),
+                        open_browser=True,
+                    )
+                    break
+                except Exception as e:
+                    last_error = e
+                    continue
+
+            if credentials is None:
+                try:
+                    print("\nLocalhost redirect did not succeed. Falling back to console authentication...")
+                    print("1) A URL will be printed below.\n2) Open it in a browser, authorize, then paste the code here.")
+                    credentials = flow.run_console()
+                except Exception as e2:
+                    raise RuntimeError(
+                        f"Unable to complete authentication via localhost or console. Last localhost error: {last_error}; console error: {e2}"
+                    )
             
             # Save token
             with open(token_file, "w") as f:

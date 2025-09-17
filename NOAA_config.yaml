@@ -1,0 +1,31 @@
+run_noaa_formatting: true
+# This config file is for FAIReSheets' NOAA-specific formatting.
+# It is used to set parameters for the formatting run.
+# NOAA's FAIRe metadata templates are the input format for the Ocean DNA Explorer,
+# as well as the input format for edna2obis, which helps with submission to OBIS and GBIF.
+
+# Required: Project ID (must match the project_id used in FAIReSheets)
+project_id: "noaa-aoml-gomecc4"
+
+#-----------------------------------------------------------------
+
+# If you DO NOT have any analysis runs ready:
+# Use the following to generate a generic analysisMetadata sheet:
+
+analysis_run_name:
+  "analysisMetadata_<analysis_run_name>":
+    assay_name: ""
+#-----------------------------------------------------------------
+
+# If you DO have analysis runs ready:
+# To use specific analysis run names, uncomment and modify:
+#
+#   gomecc4_16s_p1-2_v2024.10_241122:
+#     assay_name: "ssu16sv4v5-emp"
+#   # Add more analysis runs as needed
+#   gomecc4_16s_p3-6_v2024.10_241122:
+#     assay_name: "ssu16sv4v5-emp"
+#   gomecc4_18s_p1-6_v2024.10_241122:
+#     assay_name: "ssu18sv9-emp"
+
+#-----------------------------------------------------------------

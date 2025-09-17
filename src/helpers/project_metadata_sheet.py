@@ -61,18 +61,18 @@ def create_project_metadata_sheet(worksheet, full_temp_file_name, input_df, req_
     
     # Handle assay_name based on number of assays
     if len(assay_name) == 1:
-        # Single assay - just put it in project_level
+        # If there is only one assay, put it in the project_level column
         project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', 'project_level'] = assay_name[0]
     else:
-        # Multiple assays - put pipe-separated list in project_level
-        project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', 'project_level'] = ' | '.join(assay_name)
-        
-        # Also create individual columns for each assay
-        for i, name in enumerate(assay_name):
-            col_name = f"assay{i+1}"
-            if col_name not in project_meta_df.columns:
-                project_meta_df[col_name] = ""
-            project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', col_name] = name
+        # If there are multiple assays, leave the project_level column blank for assay_name
+        project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', 'project_level'] = ''
+
+    # Add assay_name columns for multiple assays
+    for i, name in enumerate(assay_name):
+        col_name = name
+        if col_name not in project_meta_df.columns:
+            project_meta_df[col_name] = ""
+        project_meta_df.loc[project_meta_df['term_name'] == 'assay_name', col_name] = name
     
     # Final check to ensure no 'nan' values remain
     project_meta_df = project_meta_df.replace('nan', '')
@@ -158,7 +158,7 @@ def create_project_metadata_sheet(worksheet, full_temp_file_name, input_df, req_
                 # If multiple assays, apply to each assay column
                 if len(assay_name) > 1:
                     for i in range(len(assay_name)):
-                        col_name = f"assay{i+1}"
+                        col_name = assay_name[i]
                         if col_name in project_meta_df.columns:
                             assay_col = project_meta_df.columns.get_loc(col_name) + 1
                             

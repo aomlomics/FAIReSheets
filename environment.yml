@@ -1,4 +1,4 @@
-name: fairesheets
+name: faire2ode
 channels:
   - conda-forge
   - defaults
