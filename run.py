@@ -1,5 +1,5 @@
 """
-Main entry point for FAIReSheets and FAIRe2NODE tools.
+Main entry point for FAIReSheets and FAIRe2NOAA tools.
 """
 
 import os
@@ -9,7 +9,7 @@ import warnings
 from dotenv import load_dotenv
 from src.auth import authenticate
 from src.FAIReSheets import FAIReSheets
-from src.FAIRe2NODE import FAIRe2NODE
+from src.FAIRe2NOAA import FAIRe2NOAA
 
 # Suppress specific openpyxl warnings about data validation in the console
 warnings.filterwarnings("ignore", category=UserWarning, 
@@ -88,8 +88,8 @@ def main():
         
         if run_noaa_formatting:
             # Step 2: Convert to ODE format
-            print("\n🔄 Step 2: Converting to ODE format...")
-            FAIRe2NODE(client=client, project_id=project_id)
+            print("\n🔄 Step 2: Converting to (NOAA) ODE format...")
+            FAIRe2NOAA(client=client, project_id=project_id)
             
             print("\n✨ All done! Your Ocean DNA Explorer-compatible template is ready!")
         else:

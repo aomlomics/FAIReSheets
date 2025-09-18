@@ -4,12 +4,12 @@
 
 FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to customizable Google Sheets templates. FAIReSheets can be run in one of 2 modes:
 1. **FAIRe eDNA:** Generate FAIRe eDNA data templates from the FAIRe checklist
-2. **ODE-ready:** Generate ODE-ready (NOAA) data templates, ready for submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/), and can be used as input to [edna2obis](https://github.com/aomlomics/edna2obis), a data pipeline for submission to [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/).
+2. **ODE-ready (NOAA):** Generate ODE-ready (NOAA) data templates, ready for submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/), and can be used as input to [edna2obis](https://github.com/aomlomics/edna2obis), a data pipeline for submission to [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/).
 
 NOTE: FAIReSheets generates BLANK templates. You must fill them in with data manually after they're generated.
 
 ### Quick Start Summary
-Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with the Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and optionally in `NOAA_config.yaml` if you want ODE-ready templates, follow the authentication workflow (on your browser), and run `python run.py`.
+Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with the Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and optionally in `NOAA_config.yaml` if you want NOAA/ODE-ready templates, follow the authentication workflow (on your browser), and run `python run.py`.
 
 ---
 ### Table of Contents
@@ -61,16 +61,16 @@ Before using FAIReSheets, you'll need to request access. This only needs to happ
 
 FAIReSheets can generate **EITHER** FAIRe eDNA templates, **OR** ODE-ready (NOAA) eDNA templates. See more info in the bullet points below:
 - **FAIRe eDNA:** The default mode of FAIReSheets, this will generate the exact format which the [FAIRe eDNA collaboration](https://fair-edna.github.io/index.html) supports. Parameters for the template are set in the `config.yaml` file. HINT: for users with qPCR data, this is what you want!
-- **ODE-ready:** Generates templates in the format required for submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/), NOAA 'Omics own eDNA data portal. Submission to ODE will unlock your data's potential, with an intuitive user interface, data visualizations, search, API endpoints, and more! These data templates can also be used as input to [edna2obis](https://github.com/aomlomics/edna2obis), a data pipeline for submission to [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/). Parameters for the template are set in the `NOAA_config.yaml` file. HIGHLY RECOMMENDED to any user with metabarcoding / targeted eDNA data!
+- **(NOAA) ODE-ready:** Generates templates in the format required for submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/), NOAA 'Omics own eDNA data portal. Submission to ODE will unlock your data's potential, with an intuitive user interface, data visualizations, search, API endpoints, and more! These data templates can also be used as input to [edna2obis](https://github.com/aomlomics/edna2obis), a data pipeline for submission to [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/). Parameters for the template are set in the `NOAA_config.yaml` file. HIGHLY RECOMMENDED to any user with metabarcoding / targeted eDNA data!
 
 
 Customize your generated data templates depending on your data:
  - Open `config.yaml` and `NOAA_config.yaml` to set your project-specific parameters.
  - Comments in the files explain what each parameter does.
  - `config.yaml` is for FAIRe eDNA template parameters.
- - `NOAA_config.yaml` is for ODE-ready template parameters.
+ - `NOAA_config.yaml` is for NOAA / ODE-ready template parameters.
 
-If you would like to generate ODE-ready templates, set the `run_noaa_formatting` config parameter to `true`, like this: 
+If you would like to generate NOAA / ODE-ready templates, set the `run_noaa_formatting` config parameter to `true`, like this: 
 ```bash 
 run_noaa_formatting: true
 ```

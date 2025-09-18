@@ -1,5 +1,5 @@
 """
-FAIRe2NODE - Converts FAIReSheets templates to Ocean DNA Explorer input format.
+FAIRe2NOAA - Converts FAIReSheets templates to NOAA Ocean DNA Explorer input format.
 
 This script takes a FAIReSheets-generated Google Sheet and modifies it to be compatible
 with ODE submission requirements. It removes bioinformatics fields and adds NOAA-specific
@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from tqdm import tqdm
 
-from src.helpers.FAIRe2NODE_helpers import (
+from src.helpers.FAIRe2NOAA_helpers import (
     get_bioinformatics_fields,
     remove_bioinfo_fields_from_project_metadata,
     remove_bioinfo_fields_from_experiment_metadata,
@@ -27,11 +27,11 @@ from src.helpers.FAIRe2NODE_helpers import (
     remove_taxa_sheets,
     create_analysis_metadata_sheets,
     add_noaa_fields_to_analysis_metadata,
-    update_readme_sheet_for_FAIRe2NODE,
+    update_readme_sheet_for_FAIRe2NOAA,
     show_next_steps_page
 )
 
-def FAIRe2NODE(client=None, project_id=None):
+def FAIRe2NOAA(client=None, project_id=None):
     """
     Convert FAIReSheets template to ODE format.
     
@@ -68,7 +68,7 @@ def FAIRe2NODE(client=None, project_id=None):
         raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
     
     # Create a progress bar for the entire process
-    pbar = tqdm(total=6, desc="Converting to ODE format", unit="step", position=0, leave=True)
+    pbar = tqdm(total=6, desc="Converting to NOAA format", unit="step", position=0, leave=True)
     
     try:
         # Get the worksheets
@@ -120,13 +120,13 @@ def FAIRe2NODE(client=None, project_id=None):
         noaa_analysis_fields = get_noaa_fields(noaa_checklist_path, "NOAAanalysisMetadata")
         for analysis_run_name, worksheet in analysis_worksheets.items():
             add_noaa_fields_to_analysis_metadata(worksheet, noaa_analysis_fields, config, analysis_run_name)
-        update_readme_sheet_for_FAIRe2NODE(spreadsheet, config)
+        update_readme_sheet_for_FAIRe2NOAA(spreadsheet, config)
         pbar.update(1)
         
         # Part 6: Rename the spreadsheet
         pbar.set_description("Renaming spreadsheet")
         if project_id:
-            new_title = f"FAIRe-ODE_{project_id}"
+            new_title = f"FAIRe-NOAA_{project_id}"
             spreadsheet.update_title(new_title)
             print(f"\n📝 Spreadsheet renamed to: {new_title}")
         else:
@@ -152,7 +152,7 @@ if __name__ == "__main__":
         client = authenticate()
         
         # Run the conversion
-        FAIRe2NODE(client=client)
+        FAIRe2NOAA(client=client)
         
     except Exception as e:
         print(f"\n❌ Error: {e}")
