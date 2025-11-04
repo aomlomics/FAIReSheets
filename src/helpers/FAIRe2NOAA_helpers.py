@@ -900,7 +900,7 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
 
 def remove_taxa_sheets(spreadsheet):
     """
-    Remove taxaRaw and taxaFinal sheets from the spreadsheet.
+    Remove taxaRaw sheet from the spreadsheet.
     
     Args:
         spreadsheet (gspread.Spreadsheet): The Google Spreadsheet object
@@ -908,11 +908,9 @@ def remove_taxa_sheets(spreadsheet):
     try:
         # Get the worksheets
         taxa_raw = spreadsheet.worksheet("taxaRaw")
-        taxa_final = spreadsheet.worksheet("taxaFinal")
         
         # Delete the worksheets
         spreadsheet.del_worksheet(taxa_raw)
-        spreadsheet.del_worksheet(taxa_final)
         
     except Exception as e:
         raise Exception(f"Error removing taxa sheets: {e}")
