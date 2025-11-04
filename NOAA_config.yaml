@@ -1,4 +1,4 @@
-run_noaa_formatting: false
+run_noaa_formatting: true
 # This config file is for FAIReSheets' NOAA-specific formatting.
 # It is used to set parameters for the formatting run.
 # NOAA's FAIRe metadata templates are the input format for the Ocean DNA Explorer,

@@ -101,11 +101,11 @@ When you run FAIReSheets for the first time, the following will happen:
 - **Problem**: Missing `client_secrets.json` or `token.json`
   - **Solution**: Make sure you've downloaded these files from the Git Gist and placed them in the root of the project directory.
 
-## Optional (recommended)
+## Optional (recommended): Google Apps Script
 
-To automatically track modifications in your Google Sheet, you can use the following Apps Script. This script updates the modification timestamp and user email in the README sheet whenever an edit is made to any sheet except "README" and "Drop-down values".
+Copy and Paste the following Google Apps Script for some helpful features, like tracking modifications in the README of your Google Sheet, data validation on important fields, font formatter, and a button to download all sheets as TSV files (needed for [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and edna2obis submission).
 
-### Steps to Add the Apps Script
+### Adding the Google Apps Script
 
 1. Open your Google Sheet.
 2. Click on `Extensions` in the menu, then select `Apps Script`.
@@ -370,7 +370,22 @@ function clearErrorFormatting(spreadsheet) {
 4. Click the disk icon or `File > Save` to save the script.
 5. Close the Apps Script editor.
 
-Now, whenever you make an edit to any sheet (except "README" and "Drop-down values"), the modification timestamp and your email will be automatically updated in the README sheet.
+### Preparing Your Data for the Ocean DNA Explorer (ODE)
+<div align="center">
+  <img src="src/helpers/node_logo_light_mode.svg" alt="Ocean DNA Explorer Logo" width="200">
+</div>
+
+For submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and to [edna2obis](https://github.com/aomlomics/edna2obis), you will need to download your data sheets (once you have filled them with data) as TSV files. The Google Apps Script you'll add to your sheet includes a tool to make this easy:
+
+**Steps to Download Your Data:**
+1.  After adding the Apps Script (see instructions below), a new menu will appear in your Google Sheet called **FAIReSheets Tools**.
+2.  Click **FAIReSheets Tools > Download all sheets as TSV**.
+3.  You will be prompted to enter a folder name.
+
+> **⚠️ Important Warning**
+> Use a unique and specific name for your download folder (e.g., `your-project-name_ODE-submission`). If a folder with the same name already exists in your Google Drive (including folders shared with you), your files will be saved there.
+
+This will download all your sheets as submission-ready TSV files to the Google Drive folder you specified. The Apps Script also provides helpful data validation features that run automatically when you edit your sheet, helping you catch common errors before submission.
 
 ## Disclaimer
 This repository is a scientific product and is not official communication of the National Oceanic and Atmospheric Administration, or the United States Department of Commerce. All NOAA GitHub project code is provided on an 'as is' basis and the user assumes responsibility for its use. Any claims against the Department of Commerce or Department of Commerce bureaus stemming from the use of this GitHub project will be governed by all applicable Federal law. Any reference to specific commercial products, processes, or services by service mark, trademark, manufacturer, or otherwise, does not constitute or imply their endorsement, recommendation or favoring by the Department of Commerce. The Department of Commerce seal and logo, or the seal and logo of a DOC bureau, shall not be used in any manner to imply endorsement of any commercial product or activity by DOC or the United States Government.
