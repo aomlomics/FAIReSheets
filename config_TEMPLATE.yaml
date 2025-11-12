@@ -37,8 +37,8 @@ project_id: your-project-id
 # Assay name(s) (no spaces)
 # You can include multiple assays by adding them as separate list items
 assay_name:
-  - your-assay-name-1
-  - your-assay-name-2
+  - Bacteria-16S-V4V5-Parada
+  - Eukarya-18S-V9-Lane-Medlin
 
 # OPTIONAl: User-defined fields for project metadata
 # Add any additional fields you want to include in the metadata sheets

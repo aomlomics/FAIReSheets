@@ -4,7 +4,7 @@
 
 FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to customizable Google Sheets templates. FAIReSheets can be run in one of 2 modes:
 1. **FAIRe eDNA:** Generate FAIRe eDNA data templates from the FAIRe checklist
-2. **ODE-ready (NOAA):** Generate ODE-ready (NOAA) data templates, ready for submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/), and can be used as input to [edna2obis](https://github.com/aomlomics/edna2obis), a data pipeline for submission to [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/).
+2. **ODE-ready (NOAA):** Generate (FAIRe-NOAA) data templates, formatted for submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/), and can be used as input to [edna2obis](https://github.com/aomlomics/edna2obis), a data pipeline for submission to [GBIF](https://www.gbif.org/) and [OBIS](https://obis.org/).
 
 NOTE: FAIReSheets generates BLANK templates. You must fill them in with data manually after they're generated.
 
@@ -123,27 +123,29 @@ function onOpen() {
 }
 
 /**
- * Exports all sheets in the spreadsheet as TSV files to a specified Google Drive folder.
+ * Exports all sheets in the spreadsheet as TSV files to an auto-created Google Drive folder.
  */
 function exportSheetsAsTsv() {
   const ui = SpreadsheetApp.getUi();
-  const folderNamePrompt = ui.prompt(
-    'Enter Google Drive folder name',
-    'Enter a folder name for the TSV files. WARNING: Use a specific name to avoid conflicts. If a folder with this name already exists (including shared folders), your files will be saved there.',
-    ui.ButtonSet.OK_CANCEL);
-
-  const button = folderNamePrompt.getSelectedButton();
-  const folderName = folderNamePrompt.getResponseText();
-
-  if (button == ui.Button.CANCEL || !folderName || folderName.trim() === '') {
-    return; // Exit if user cancelled or entered no name
-  }
-
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const spreadsheetName = spreadsheet.getName();
   
-  let folders = DriveApp.getFoldersByName(folderName);
-  let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+  // Create folder name with timestamp
+  const now = new Date();
+  const timestamp = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd_HHmm");
+  const folderName = spreadsheetName + "_TSVs_" + timestamp;
+  
+  // Show confirmation dialog
+  const confirmMessage = 'This will create a new folder in your Google Drive home directory named:\n\n"' + folderName + '"\n\nAll sheets will be exported as TSV files to this folder.\n\nContinue?';
+  const response = ui.alert('Export Sheets as TSV', confirmMessage, ui.ButtonSet.YES_NO);
+  
+  if (response !== ui.Button.YES) {
+    return; // User cancelled
+  }
+  
+  // Create new folder in Drive root (each export gets its own timestamped folder)
+  const rootFolder = DriveApp.getRootFolder();
+  const folder = rootFolder.createFolder(folderName);
   
   const sheets = spreadsheet.getSheets();
   const filesCreated = [];
@@ -172,7 +174,7 @@ function exportSheetsAsTsv() {
 
   let message = '';
   if (filesCreated.length > 0) {
-    message += `Successfully exported ${filesCreated.length} sheets to folder "${folderName}".\n\nFiles:\n${filesCreated.join('\n')}`;
+    message += `Successfully exported ${filesCreated.length} sheets to folder "${folderName}" in your Google Drive.\n\nFiles:\n${filesCreated.join('\n')}`;
   }
   if (errors.length > 0) {
     message += `\n\nErrors encountered:\n${errors.join('\n')}`;
@@ -380,12 +382,10 @@ For submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) an
 **Steps to Download Your Data:**
 1.  After adding the Apps Script (see instructions below), a new menu will appear in your Google Sheet called **FAIReSheets Tools**.
 2.  Click **FAIReSheets Tools > Download all sheets as TSV**.
-3.  You will be prompted to enter a folder name.
+3.  A confirmation dialog will appear showing the folder name that will be created.
+4.  Click "Yes" to proceed. The script will create a new folder in your Google Drive home directory (e.g., `FAIRe_NOAA_YourProject_20241112_TSVs_20241112_1430`) and save all sheets as TSV files there.
 
-> **⚠️ Important Warning**
-> Use a unique and specific name for your download folder (e.g., `your-project-name_ODE-submission`). If a folder with the same name already exists in your Google Drive (including folders shared with you), your files will be saved there.
-
-This will download all your sheets as submission-ready TSV files to the Google Drive folder you specified. The Apps Script also provides helpful data validation features that run automatically when you edit your sheet, helping you catch common errors before submission.
+This will download all your sheets as submission-ready TSV files. The Apps Script also provides helpful data validation features that run automatically when you edit your sheet, helping you catch common errors before submission.
 
 ## Disclaimer
 This repository is a scientific product and is not official communication of the National Oceanic and Atmospheric Administration, or the United States Department of Commerce. All NOAA GitHub project code is provided on an 'as is' basis and the user assumes responsibility for its use. Any claims against the Department of Commerce or Department of Commerce bureaus stemming from the use of this GitHub project will be governed by all applicable Federal law. Any reference to specific commercial products, processes, or services by service mark, trademark, manufacturer, or otherwise, does not constitute or imply their endorsement, recommendation or favoring by the Department of Commerce. The Department of Commerce seal and logo, or the seal and logo of a DOC bureau, shall not be used in any manner to imply endorsement of any commercial product or activity by DOC or the United States Government.
