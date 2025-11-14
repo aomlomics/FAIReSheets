@@ -21,13 +21,14 @@ sample_type:
 
 # Assay type determines which sheets will be generated
 # YOU CAN ONLY CHOOSE ONE OF THE 2 OPTIONS:
-#   - metabarcoding: Generates taxaRaw, taxaFinal, experimentRunMetadata sheets
+#   - assay_type: metabarcoding: Generates taxaRaw, taxaFinal, experimentRunMetadata sheets
 #     (Used for sequencing-based approaches like 16S/18S rRNA gene sequencing)
 #
 #   OR
 #
-#   - targeted: Generates stdData, eLowQuantData, ampData sheets
-#     (Used for qPCR and similar targeted approaches)
+#   - assay_type: targeted: Generates stdData, eLowQuantData, ampData sheets
+#     (Used for qPCR)
+
 assay_type: metabarcoding
 
 # Project identifier (no spaces)
