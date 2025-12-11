@@ -31,13 +31,8 @@ from google.oauth2.service_account import Credentials
 from dotenv import load_dotenv
 import time
 
-# Import tqdm for progress bar
-try:
-    from tqdm import tqdm
-    TQDM_AVAILABLE = True
-except ImportError:
-    TQDM_AVAILABLE = False
-    print("Warning: tqdm package not found. Install with 'pip install tqdm' for progress bar visualization.")
+# Progress bar via tqdm is disabled in favor of CLI spinners handled in run.py
+TQDM_AVAILABLE = False
 
 # Import functions from separate modules
 from src.helpers.readme_sheet import create_readme_sheet
@@ -217,10 +212,6 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     # Add all sheet names
     for sheet_name in sheet_names:
         operations.append(f"{sheet_name}")
-    
-    # Initialize progress bar
-    if TQDM_AVAILABLE:
-        pbar = tqdm(total=len(operations), desc="Initializing...", unit="sheet")
     
     # Delete existing sheets if they match our names
     for sheet_name in existing_sheets:

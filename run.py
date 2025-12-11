@@ -6,27 +6,45 @@ import os
 import sys
 import yaml
 import warnings
+
 from dotenv import load_dotenv
+from rich.console import Console
+import pyfiglet
+
 from src.auth import authenticate
 from src.FAIReSheets import FAIReSheets
 from src.FAIRe2NODE import FAIRe2NODE
 
 # Suppress specific openpyxl warnings about data validation in the console
-warnings.filterwarnings("ignore", category=UserWarning, 
-                       message="Data Validation extension is not supported and will be removed")
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message="Data Validation extension is not supported and will be removed",
+)
 
 # Get the current directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Display welcome message
-print("\n===================================================")
-print("Welcome to FAIReSheets - FAIR eDNA Template Generator")
-print("===================================================")
-print("This tool generates FAIR eDNA data templates in Google Sheets")
-print("and converts them to ODE format.")
-print("First-time users will be prompted to authenticate with Google.")
-print("NOTE: You must be on the approved users list to use this tool.")
-print("To request access, email bayden.willms@noaa.gov\n")
+# Initialize rich console
+console = Console()
+
+# Display welcome message with ASCII art banner
+banner = pyfiglet.figlet_format("FAIReSheets")
+console.print()
+console.print(banner, style="bold cyan")
+console.print(
+    "FAIReSheets generates FAIR eDNA metadata templates in Google Sheets.",
+    style="bold",
+)
+console.print(
+    "It can create standard FAIR eDNA metadata templates and "
+    "Ocean DNA Explorer-compatible FAIR eDNA metadata templates.\n"
+)
+console.print(
+    "First-time users will be prompted to authenticate with Google.\n"
+    "NOTE: You must be on the approved users list to use this tool.\n"
+    "To request access, email bayden.willms@noaa.gov\n"
+)
 
 def main():
     """Main function to run FAIReSheets."""
@@ -38,14 +56,17 @@ def main():
         with open('.env', 'w') as f:
             f.write('SPREADSHEET_ID=your_spreadsheet_id_here\n')
             f.write('GIST_URL=your_gist_url_here\n')
-        print("\n⚠️  Created .env file. Please edit it with your spreadsheet ID and Gist URL.")
+        console.print(
+            "\nCreated .env file. Please edit it with your spreadsheet ID and Gist URL.",
+            style="bold yellow",
+        )
         return
 
     # Authenticate with Google
     try:
         client = authenticate()
     except Exception as e:
-        print(f"\n❌ Authentication failed: {e}")
+        console.print(f"\nAuthentication failed: {e}", style="bold red")
         return
 
     try:
@@ -71,32 +92,47 @@ def main():
         experimentRunMetadata_user = config.get('experimentRunMetadata_user', None)
         input_dir = os.path.join(current_dir, 'input')
 
-        # Step 1: Generate FAIRe template
-        print("\n📝 Step 1: Generating FAIRe template...")
-        FAIReSheets(
-            req_lev=req_lev,
-            sample_type=sample_type,
-            assay_type=assay_type,
-            project_id=project_id,
-            assay_name=assay_name,
-            projectMetadata_user=projectMetadata_user,
-            sampleMetadata_user=sampleMetadata_user,
-            experimentRunMetadata_user=experimentRunMetadata_user,
-            input_dir=input_dir,
-            client=client
-        )
+        # Step 1: Generate FAIRe template (spinner)
+        console.print("\nStep 1: Generating FAIRe template...", style="bold")
+        with console.status(
+            "[bold cyan]Generating FAIRe template...[/bold cyan]", spinner="dots"
+        ):
+            FAIReSheets(
+                req_lev=req_lev,
+                sample_type=sample_type,
+                assay_type=assay_type,
+                project_id=project_id,
+                assay_name=assay_name,
+                projectMetadata_user=projectMetadata_user,
+                sampleMetadata_user=sampleMetadata_user,
+                experimentRunMetadata_user=experimentRunMetadata_user,
+                input_dir=input_dir,
+                client=client,
+            )
         
         if run_noaa_formatting:
-            # Step 2: Convert to ODE format
-            print("\n🔄 Step 2: Converting to ODE format...")
-            FAIRe2NODE(client=client, project_id=project_id)
+            # Step 2: Convert to Ocean DNA Explorer format (spinner)
+            console.print(
+                "\nStep 2: Converting to Ocean DNA Explorer format...", style="bold"
+            )
+            with console.status(
+                "[bold cyan]Converting to Ocean DNA Explorer format...[/bold cyan]",
+                spinner="dots",
+            ):
+                FAIRe2NODE(client=client, project_id=project_id)
             
-            print("\n✨ All done! Your Ocean DNA Explorer-compatible template is ready!")
+            console.print(
+                "\nAll done! Your Ocean DNA Explorer-compatible template is ready!",
+                style="bold green",
+            )
         else:
-            print("\n✨ All done! Your FAIReSheets template is ready!")
+            console.print(
+                "\nAll done! Your FAIReSheets template is ready!",
+                style="bold green",
+            )
         
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        console.print(f"\nError: {e}", style="bold red")
 
 if __name__ == "__main__":
     main() 

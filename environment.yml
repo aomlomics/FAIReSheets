@@ -17,4 +17,6 @@ dependencies:
     - google-auth-oauthlib
     - google-api-python-client
     - requests
-    - tqdm 
+    - tqdm
+    - rich
+    - pyfiglet
