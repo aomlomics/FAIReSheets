@@ -8,8 +8,8 @@ sample_type:
 assay_type: metabarcoding
 project_id: institution-lab-project
 assay_name:
-  - ssu16sv4v5-parada
-  - ssu18sv9-amaralzettler
+  - Bacteria-16S-V4V5-Parada
+  - Eukarya-18S-V9-Lane-Medlin
 projectMetadata_user:
   # - user_defined_project_term_1
   # - user_defined_project_term_2

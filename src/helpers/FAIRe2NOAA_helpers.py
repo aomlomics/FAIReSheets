@@ -900,7 +900,7 @@ def add_noaa_fields_to_sample_metadata(worksheet, noaa_fields):
 
 def remove_taxa_sheets(spreadsheet):
     """
-    Remove taxaRaw and taxaFinal sheets from the spreadsheet.
+    Remove taxaRaw sheet from the spreadsheet.
     
     Args:
         spreadsheet (gspread.Spreadsheet): The Google Spreadsheet object
@@ -908,11 +908,9 @@ def remove_taxa_sheets(spreadsheet):
     try:
         # Get the worksheets
         taxa_raw = spreadsheet.worksheet("taxaRaw")
-        taxa_final = spreadsheet.worksheet("taxaFinal")
         
         # Delete the worksheets
         spreadsheet.del_worksheet(taxa_raw)
-        spreadsheet.del_worksheet(taxa_final)
         
     except Exception as e:
         raise Exception(f"Error removing taxa sheets: {e}")
@@ -1218,9 +1216,9 @@ def add_noaa_fields_to_analysis_metadata(worksheet, noaa_fields, config, analysi
     except Exception as e:
         raise Exception(f"Error adding NOAA fields to analysisMetadata: {e}")
     
-def update_readme_sheet_for_FAIRe2NODE(spreadsheet, config):
+def update_readme_sheet_for_FAIRe2NOAA(spreadsheet, config):
     """
-    Update the README sheet to reflect the FAIRe2NODE structure.
+    Update the README sheet to reflect the FAIRe2NOAA structure.
     
     Args:
         spreadsheet (gspread.Spreadsheet): The Google Spreadsheet object
@@ -1640,12 +1638,12 @@ def update_readme_sheet_for_FAIRe2NODE(spreadsheet, config):
             readme_sheet.spreadsheet.batch_update({"requests": batch_requests})
             
     except Exception as e:
-        raise Exception(f"Error updating README sheet for FAIRe2NODE: {e}")
+        raise Exception(f"Error updating README sheet for FAIRe2NOAA: {e}")
 
 def show_next_steps_page():
     """
     Opens the next steps page in the default web browser.
-    This page shows what to do after successful FAIRe2NODE conversion.
+    This page shows what to do after successful FAIRe2NOAA conversion.
     """
     try:
         # Get the absolute path to the next_steps.html file

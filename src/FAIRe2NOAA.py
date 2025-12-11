@@ -1,5 +1,5 @@
 """
-FAIRe2NODE - Converts FAIReSheets templates to Ocean DNA Explorer input format.
+FAIRe2NOAA - Converts FAIReSheets templates to NOAA Ocean DNA Explorer input format.
 
 This script takes a FAIReSheets-generated Google Sheet and modifies it to be compatible
 with Ocean DNA Explorer submission requirements. It removes bioinformatics fields and
@@ -14,7 +14,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 
-from src.helpers.FAIRe2NODE_helpers import (
+from src.helpers.FAIRe2NOAA_helpers import (
     get_bioinformatics_fields,
     remove_bioinfo_fields_from_project_metadata,
     remove_bioinfo_fields_from_experiment_metadata,
@@ -26,12 +26,11 @@ from src.helpers.FAIRe2NODE_helpers import (
     remove_taxa_sheets,
     create_analysis_metadata_sheets,
     add_noaa_fields_to_analysis_metadata,
-    update_readme_sheet_for_FAIRe2NODE,
+    update_readme_sheet_for_FAIRe2NOAA,
     show_next_steps_page
 )
 
-
-def FAIRe2NODE(client=None, project_id=None):
+def FAIRe2NOAA(client=None, project_id=None):
     """
     Convert FAIReSheets template to Ocean DNA Explorer format.
 
@@ -66,7 +65,10 @@ def FAIRe2NODE(client=None, project_id=None):
     noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'input', 'FAIRe_NOAA_checklist_v1.0.2.xlsx')
     if not os.path.exists(noaa_checklist_path):
         raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
-
+    
+    # Total number of steps
+    total_steps = 6
+    
     try:
         # Get the worksheets
         project_metadata = spreadsheet.worksheet("projectMetadata")
@@ -74,13 +76,13 @@ def FAIRe2NODE(client=None, project_id=None):
         sample_metadata = spreadsheet.worksheet("sampleMetadata")
 
         # Part 1: Remove bioinformatics fields
-        print("Removing bioinformatics fields...")
+        print(f"Removing bioinformatics fields... (1/{total_steps})")
         bioinfo_fields = get_bioinformatics_fields(noaa_checklist_path)
         remove_bioinfo_fields_from_project_metadata(project_metadata, bioinfo_fields)
         remove_bioinfo_fields_from_experiment_metadata(experiment_metadata, bioinfo_fields)
 
         # Part 2: Add NOAA fields to sheets
-        print("Adding NOAA fields to metadata sheets...")
+        print(f"Adding NOAA fields to metadata sheets... (2/{total_steps})")
         noaa_project_fields = get_noaa_fields(noaa_checklist_path, "NOAAprojectMetadata")
         add_noaa_fields_to_project_metadata(project_metadata, noaa_project_fields)
 
@@ -101,28 +103,27 @@ def FAIRe2NODE(client=None, project_id=None):
         )
 
         # Part 3: Remove taxa sheets
-        print("Removing taxa sheets...")
+        print(f"Removing taxa sheets... (3/{total_steps})")
         remove_taxa_sheets(spreadsheet)
 
         # Part 4: Create analysisMetadata sheets
-        print("Creating analysis metadata sheets...")
+        print(f"Creating analysis metadata sheets... (4/{total_steps})")
         analysis_worksheets = create_analysis_metadata_sheets(spreadsheet, config)
 
         # Part 5: Add NOAA analysis metadata fields
-        print("Adding NOAA analysis metadata fields...")
+        print(f"Adding NOAA analysis metadata fields... (5/{total_steps})")
         noaa_analysis_fields = get_noaa_fields(noaa_checklist_path, "NOAAanalysisMetadata")
         for analysis_run_name, worksheet in analysis_worksheets.items():
             add_noaa_fields_to_analysis_metadata(worksheet, noaa_analysis_fields, config, analysis_run_name)
-        update_readme_sheet_for_FAIRe2NODE(spreadsheet, config)
-
+        update_readme_sheet_for_FAIRe2NOAA(spreadsheet, config)
+        
         # Part 6: Rename the spreadsheet
-        print("Renaming spreadsheet for Ocean DNA Explorer...")
         if project_id:
-            new_title = f"FAIRe_ODE_{project_id}"
+            print(f"Renaming spreadsheet... (6/{total_steps})")
+            new_title = f"FAIRe-NOAA_{project_id}"
             spreadsheet.update_title(new_title)
-            print(f"Spreadsheet renamed to: {new_title}")
         else:
-            print("No project_id provided. Spreadsheet name unchanged.")
+            pass
 
         # Show the next steps page
         show_next_steps_page()
@@ -140,7 +141,7 @@ if __name__ == "__main__":
         client = authenticate()
 
         # Run the conversion
-        FAIRe2NODE(client=client)
-
+        FAIRe2NOAA(client=client)
+        
     except Exception as e:
         print(f"\nError: {e}")
