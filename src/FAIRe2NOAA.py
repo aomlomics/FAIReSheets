@@ -27,6 +27,7 @@ from src.helpers.FAIRe2NOAA_helpers import (
     create_analysis_metadata_sheets,
     add_noaa_fields_to_analysis_metadata,
     update_readme_sheet_for_FAIRe2NOAA,
+    update_noaa_vocab_dropdowns,
     show_next_steps_page
 )
 
@@ -67,7 +68,7 @@ def FAIRe2NOAA(client=None, project_id=None):
         raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
     
     # Total number of steps
-    total_steps = 6
+    total_steps = 7
     
     try:
         # Get the worksheets
@@ -117,9 +118,13 @@ def FAIRe2NOAA(client=None, project_id=None):
             add_noaa_fields_to_analysis_metadata(worksheet, noaa_analysis_fields, config, analysis_run_name)
         update_readme_sheet_for_FAIRe2NOAA(spreadsheet, config)
         
-        # Part 6: Rename the spreadsheet
+        # Part 6: Update dropdown values with NOAA-specific vocabulary
+        print(f"Updating dropdown values with NOAA vocabulary... (6/{total_steps})")
+        update_noaa_vocab_dropdowns(spreadsheet, noaa_checklist_path)
+        
+        # Part 7: Rename the spreadsheet
         if project_id:
-            print(f"Renaming spreadsheet... (6/{total_steps})")
+            print(f"Renaming spreadsheet... (7/{total_steps})")
             new_title = f"FAIRe-NOAA_{project_id}"
             spreadsheet.update_title(new_title)
         else:

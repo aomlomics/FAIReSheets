@@ -1640,6 +1640,215 @@ def update_readme_sheet_for_FAIRe2NOAA(spreadsheet, config):
     except Exception as e:
         raise Exception(f"Error updating README sheet for FAIRe2NOAA: {e}")
 
+def update_noaa_vocab_dropdowns(spreadsheet, noaa_checklist_path):
+    """
+    Update dropdown values in metadata sheets and Drop-down values sheet to use NOAA-specific controlled vocabulary.
+    
+    Args:
+        spreadsheet (gspread.Spreadsheet): The Google Sheet to update
+        noaa_checklist_path (str): Path to the NOAA checklist Excel file
+    """
+    try:
+        import pandas as pd
+        
+        # Read NOAA checklist to get updated vocabulary
+        noaa_checklist = pd.read_excel(noaa_checklist_path, sheet_name='checklist')
+        
+        # Build a mapping of term_name to controlled_vocabulary_options
+        vocab_map = {}
+        for _, row in noaa_checklist.iterrows():
+            term_name = row.get('term_name')
+            cv_options = row.get('controlled_vocabulary_options')
+            if pd.notna(term_name) and pd.notna(cv_options):
+                cv_str = str(cv_options).strip()
+                if cv_str and cv_str != 'nan':
+                    vocab_map[term_name] = [v.strip() for v in cv_str.split('|') if v.strip()]
+        
+        if not vocab_map:
+            return
+        
+        # Update Drop-down values sheet first
+        try:
+            dropdown_sheet = spreadsheet.worksheet('Drop-down values')
+            _update_dropdown_values_sheet(dropdown_sheet, vocab_map)
+        except gspread.exceptions.WorksheetNotFound:
+            pass
+        
+        # Update dropdowns in metadata sheets
+        metadata_sheets = ['projectMetadata', 'sampleMetadata', 'experimentRunMetadata']
+        for sheet_name in metadata_sheets:
+            try:
+                worksheet = spreadsheet.worksheet(sheet_name)
+                _update_sheet_dropdowns(worksheet, vocab_map)
+            except gspread.exceptions.WorksheetNotFound:
+                continue
+            
+    except Exception as e:
+        raise Exception(f"Error updating NOAA vocabulary dropdowns: {e}")
+
+
+def _update_sheet_dropdowns(worksheet, vocab_map):
+    """
+    Update data validation dropdowns in a metadata sheet based on vocab_map.
+    Handles long-format sheets where term_name is in a column (usually column 3).
+    
+    Args:
+        worksheet (gspread.Worksheet): The worksheet to update
+        vocab_map (dict): Mapping of term_name to list of vocabulary options
+    """
+    try:
+        data = worksheet.get_all_values()
+        if not data or len(data) < 2:
+            return
+        
+        # For long-format sheets, find the header row and identify the term_name column
+        header_row = None
+        term_name_col_idx = None
+        
+        for idx in range(min(10, len(data))):
+            row = data[idx]
+            # Look for common header markers
+            if 'term_name' in row or 'term' in row or (len(row) > 2 and any(term in row for term in vocab_map.keys())):
+                header_row = idx
+                # Find which column has term_name or contains our vocab terms
+                for col_idx, cell in enumerate(row):
+                    if cell == 'term_name' or cell == 'term':
+                        term_name_col_idx = col_idx
+                        break
+                # If no header found, look for vocab terms to identify term column
+                if term_name_col_idx is None:
+                    for col_idx, cell in enumerate(row):
+                        if cell in vocab_map:
+                            term_name_col_idx = col_idx
+                            break
+                break
+        
+        if header_row is None or term_name_col_idx is None:
+            return
+        
+        # Build validation requests for each row with a vocab term
+        validation_requests = []
+        
+        for row_idx in range(header_row + 1, len(data)):
+            row = data[row_idx]
+            if term_name_col_idx >= len(row):
+                continue
+            
+            term_name = row[term_name_col_idx]
+            if term_name not in vocab_map:
+                continue
+            
+            cv_values = vocab_map[term_name]
+            
+            # Update dropdowns for ALL columns after term_name (project_level + assay columns)
+            for col_idx in range(term_name_col_idx + 1, len(row)):
+                validation_requests.append({
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": worksheet.id,
+                            "startRowIndex": row_idx,
+                            "endRowIndex": row_idx + 1,
+                            "startColumnIndex": col_idx,
+                            "endColumnIndex": col_idx + 1
+                        },
+                        "rule": {
+                            "condition": {
+                                "type": "ONE_OF_LIST",
+                                "values": [{"userEnteredValue": v} for v in cv_values]
+                            },
+                            "showCustomUi": True,
+                            "strict": False
+                        }
+                    }
+                })
+        
+        # Apply validation requests in batches of 100 to avoid API limits
+        if validation_requests:
+            for i in range(0, len(validation_requests), 100):
+                batch = validation_requests[i:i+100]
+                worksheet.spreadsheet.batch_update({"requests": batch})
+            
+    except Exception as e:
+        raise Exception(f"Error updating sheet dropdowns: {e}")
+
+
+def _update_dropdown_values_sheet(worksheet, vocab_map):
+    """
+    Update the Drop-down values sheet with NOAA-specific vocabulary.
+    
+    Args:
+        worksheet (gspread.Worksheet): The Drop-down values worksheet
+        vocab_map (dict): Mapping of term_name to list of vocabulary options
+    """
+    try:
+        import pandas as pd
+        
+        # Get current data
+        current_data = worksheet.get_all_values()
+        if not current_data:
+            return
+        
+        # Create DataFrame from current data
+        headers = current_data[0]
+        df = pd.DataFrame(current_data[1:], columns=headers)
+        
+        # Find maximum vocab columns needed across all terms
+        max_vocab_needed = 0
+        for cv_values in vocab_map.values():
+            max_vocab_needed = max(max_vocab_needed, len(cv_values))
+        
+        # Ensure all vocab columns exist in headers up to max needed
+        for i in range(1, max_vocab_needed + 1):
+            col_name = f'vocab{i}'
+            if col_name not in df.columns:
+                df[col_name] = ''
+        
+        # Update each term that has new vocabulary
+        for term_name, cv_values in vocab_map.items():
+            # Find rows matching this term
+            mask = df['term_name'] == term_name
+            if mask.any():
+                # Update n_options
+                df.loc[mask, 'n_options'] = len(cv_values)
+                
+                # Clear all vocab columns first
+                for col in df.columns:
+                    if col.startswith('vocab'):
+                        df.loc[mask, col] = ''
+                
+                # Add new vocab values
+                for idx, value in enumerate(cv_values):
+                    col_name = f'vocab{idx + 1}'
+                    df.loc[mask, col_name] = value
+        
+        # Clear worksheet and write updated data
+        worksheet.clear()
+        
+        # Prepare data for update (convert NaN to empty strings)
+        data_to_write = [df.columns.tolist()]
+        for _, row in df.iterrows():
+            row_data = []
+            for val in row:
+                if pd.isna(val) or val == 'nan':
+                    row_data.append('')
+                else:
+                    row_data.append(str(val))
+            data_to_write.append(row_data)
+        
+        # Write data
+        worksheet.update('A1', data_to_write)
+        
+        # Format headers
+        worksheet.format('1:1', {
+            "textFormat": {
+                "bold": True
+            }
+        })
+        
+    except Exception as e:
+        raise Exception(f"Error updating Drop-down values sheet: {e}")
+
+
 def show_next_steps_page():
     """
     Opens the next steps page in the default web browser.

@@ -5,7 +5,7 @@ run_noaa_formatting: true
 # as well as the input format for edna2obis, which helps with submission to OBIS and GBIF.
 
 # Required: Project ID (must match the project_id used in your config.yaml file and metadata)
-project_id: "testing_11_14_2025"
+project_id: "example_project_id"
 
 #-----------------------------------------------------------------
 
