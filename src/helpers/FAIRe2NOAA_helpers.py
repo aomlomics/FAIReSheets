@@ -260,6 +260,65 @@ def remove_terms_from_experiment_metadata(worksheet, terms_to_remove):
     except Exception as e:
         raise Exception(f"Error removing specified terms from experimentRunMetadata: {e}")
 
+
+def remove_terms_from_sample_metadata(worksheet, terms_to_remove):
+    """
+    Remove specified term_name columns from sampleMetadata sheet if present.
+    Safe no-op when terms are absent.
+    
+    Args:
+        worksheet (gspread.Worksheet): The sampleMetadata worksheet
+        terms_to_remove (list[str]): Term names (column headers) to remove
+    """
+    try:
+        if not terms_to_remove:
+            return
+        # Get all data from the worksheet
+        data = worksheet.get_all_values()
+        if not data or len(data) < 3:
+            return
+        
+        # Find the term_name row by looking for 'samp_name' in the first column
+        term_row_index = None
+        for idx, row in enumerate(data):
+            if row and row[0] == 'samp_name':
+                term_row_index = idx
+                break
+        
+        if term_row_index is None:
+            return
+        
+        deny_set = set(terms_to_remove)
+        cols_to_delete = []
+        for i, term in enumerate(data[term_row_index]):
+            if term in deny_set:
+                cols_to_delete.append(i + 1)  # 1-based for Sheets API
+        if not cols_to_delete:
+            return
+        # Prepare batch delete requests from right to left
+        batch_requests = []
+        for col_idx in sorted(cols_to_delete, reverse=True):
+            batch_requests.append({
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": col_idx - 1,  # 0-based
+                        "endIndex": col_idx
+                    }
+                }
+            })
+        try:
+            worksheet.spreadsheet.batch_update({'requests': batch_requests})
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e):  # Rate limit error
+                time.sleep(60)
+                worksheet.spreadsheet.batch_update({'requests': batch_requests})
+            else:
+                raise
+    except Exception as e:
+        raise Exception(f"Error removing specified terms from sampleMetadata: {e}")
+
 # Part 2: Add NOAA fields to the sheets
 
 def get_noaa_fields(noaa_checklist_path, sheet_type):
@@ -422,6 +481,10 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
         # Add descriptions as notes and controlled vocabulary dropdowns
         note_requests = []
         validation_requests = []
+        clear_validation_requests = []
+        
+        # Number of value columns (project_level + any assay columns)
+        num_value_cols = len(headers) - project_level_col
         
         for i, row in enumerate(updated_data[1:], start=1):
             term_name = row[term_name_col]
@@ -449,11 +512,12 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
                         }
                     })
                 
-                # Add controlled vocabulary dropdown
+                # Check if this field has controlled vocabulary
                 cv_options = term_info.iloc[0]['controlled_vocabulary_options'] if 'controlled_vocabulary_options' in term_info.columns else ''
                 if pd.notna(cv_options) and cv_options:
                     values = [v.strip() for v in str(cv_options).split('|') if v.strip()]
                     if values:
+                        # Add controlled vocabulary dropdown to ALL value columns
                         validation_requests.append({
                             "setDataValidation": {
                                 "range": {
@@ -461,7 +525,7 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
                                     "startRowIndex": i,
                                     "endRowIndex": i + 1,
                                     "startColumnIndex": project_level_col,
-                                    "endColumnIndex": project_level_col + 1
+                                    "endColumnIndex": len(headers)  # All value columns
                                 },
                                 "rule": {
                                     "condition": {
@@ -473,14 +537,60 @@ def add_noaa_fields_to_project_metadata(worksheet, noaa_fields):
                                 }
                             }
                         })
+                else:
+                    # No controlled vocabulary - clear any existing dropdown validation
+                    # Clear from ALL value columns (project_level + assay columns)
+                    clear_validation_requests.append({
+                        "setDataValidation": {
+                            "range": {
+                                "sheetId": worksheet.id,
+                                "startRowIndex": i,
+                                "endRowIndex": i + 1,
+                                "startColumnIndex": project_level_col,
+                                "endColumnIndex": len(headers)  # All value columns
+                            }
+                            # No "rule" key means clear validation
+                        }
+                    })
         
         # Apply notes
         if note_requests:
             worksheet.spreadsheet.batch_update({"requests": note_requests})
         
-        # Apply data validation
+        # Clear validation for fields without controlled vocabulary (do this first)
+        if clear_validation_requests:
+            worksheet.spreadsheet.batch_update({"requests": clear_validation_requests})
+        
+        # Apply data validation for fields with controlled vocabulary
         if validation_requests:
             worksheet.spreadsheet.batch_update({"requests": validation_requests})
+        
+        # Clean up phantom dropdowns in empty rows at the bottom of the sheet
+        # Get fresh data to find where actual data ends
+        final_data = worksheet.get_all_values()
+        last_data_row = 0
+        for i, row in enumerate(final_data):
+            # Check if this row has any content in the term_name column
+            if i > 0 and term_name_col < len(row) and row[term_name_col].strip():
+                last_data_row = i
+        
+        # Clear validation from all rows after the last data row
+        # This removes phantom dropdowns in empty rows
+        total_rows = worksheet.row_count
+        if last_data_row < total_rows - 1:
+            clear_phantom_requests = [{
+                "setDataValidation": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "startRowIndex": last_data_row + 1,
+                        "endRowIndex": total_rows,
+                        "startColumnIndex": project_level_col,
+                        "endColumnIndex": len(headers)  # All value columns
+                    }
+                    # No "rule" key means clear validation
+                }
+            }]
+            worksheet.spreadsheet.batch_update({"requests": clear_phantom_requests})
         
     except Exception as e:
         raise Exception(f"Error adding NOAA fields to projectMetadata: {e}")

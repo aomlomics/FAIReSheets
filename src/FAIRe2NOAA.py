@@ -19,6 +19,7 @@ from src.helpers.FAIRe2NOAA_helpers import (
     remove_bioinfo_fields_from_project_metadata,
     remove_bioinfo_fields_from_experiment_metadata,
     remove_terms_from_experiment_metadata,
+    remove_terms_from_sample_metadata,
     get_noaa_fields,
     add_noaa_fields_to_project_metadata,
     add_noaa_fields_to_experiment_metadata,
@@ -92,6 +93,13 @@ def FAIRe2NOAA(client=None, project_id=None):
 
         noaa_experiment_fields = get_noaa_fields(noaa_checklist_path, "NOAAexperimentRunMetadata")
         add_noaa_fields_to_experiment_metadata(experiment_metadata, noaa_experiment_fields)
+
+        # NOAA-specific denylist: remove unwanted sampleMetadata terms
+        # assay_name is not needed in sampleMetadata for NOAA FAIRe sheets
+        remove_terms_from_sample_metadata(
+            sample_metadata,
+            terms_to_remove=['assay_name']
+        )
 
         # NOAA-specific denylist: remove unwanted experimentRunMetadata terms if present
         remove_terms_from_experiment_metadata(

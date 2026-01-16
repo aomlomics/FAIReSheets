@@ -6,7 +6,7 @@ req_lev:
 sample_type:
   - Water
 assay_type: metabarcoding
-project_id: testing_dropdowns
+project_id: example_project_id
 assay_name:
   - Bacteria-16S-V4V5-Parada
   - Eukarya-18S-V9-Lane-Medlin
