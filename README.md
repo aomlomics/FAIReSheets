@@ -103,13 +103,18 @@ When you run FAIReSheets for the first time, the following will happen:
 
 ## Optional (recommended): Google Apps Script
 
-Copy and Paste the following Google Apps Script for some helpful features, like tracking modifications in the README of your Google Sheet, data validation on important fields, font formatter, and a button to download all sheets as TSV files (needed for [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and edna2obis submission).
+Copy and Paste the following Google Apps Script for some helpful features, like tracking modifications in the README of your Google Sheet, data validation on important fields, and a button to download all sheets as TSV files (needed for [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and edna2obis submission).
+
+NOTE: FAIReSheets now standardizes font family + font size across all sheets during template generation, so the font-related Apps Script features are optional.
 
 ### Adding the Google Apps Script
 
 1. Open your Google Sheet.
 2. Click on `Extensions` in the menu, then select `Apps Script`.
-3. Delete any code in the script editor and copy-paste the following code:
+3. Delete any code in the script editor and copy-paste the following code.
+   IMPORTANT: Make sure you copy the FULL script starting from `function onOpen()` (the menu will NOT appear if you only paste `exportSheetsAsTsv()`).
+   After saving, reload the Google Sheet tab to trigger `onOpen()` and show the `FAIReSheets Tools` menu.
+   The first time you run it, Google may ask you to authorize permissions.
 
 ```javascript
 /**
@@ -119,7 +124,49 @@ function onOpen() {
   SpreadsheetApp.getUi()
       .createMenu('FAIReSheets Tools')
       .addItem('Download all sheets as TSV', 'exportSheetsAsTsv')
+      .addItem('Standardize font across all sheets', 'standardizeFontAcrossAllSheets')
       .addToUi();
+
+  // Auto-run font standardization once (no user action required).
+  // Uses Document Properties so it runs only the first time after the script is added/updated.
+  standardizeFontAcrossAllSheetsOnce_();
+}
+
+/**
+ * Runs standardizeFontAcrossAllSheets() only once per spreadsheet (unless you change the key).
+ */
+function standardizeFontAcrossAllSheetsOnce_() {
+  const props = PropertiesService.getDocumentProperties();
+  const key = "FAIRESHEETS_FONT_STANDARDIZED_V1";
+  if (props.getProperty(key) === "true") return;
+
+  standardizeFontAcrossAllSheets();
+  props.setProperty(key, "true");
+}
+
+/**
+ * Standardizes font for every cell in every sheet.
+ * This intentionally changes ONLY font family + font size (not background, bold, etc.).
+ */
+function standardizeFontAcrossAllSheets() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = spreadsheet.getSheets();
+
+  // Google Sheets default formatting is typically Arial 10.
+  // If you want a different font, change "Arial" here.
+  const fontFamily = "Arial";
+  const fontSize = 10;
+
+  sheets.forEach(sheet => {
+    const maxRows = sheet.getMaxRows();
+    const maxCols = sheet.getMaxColumns();
+    if (maxRows < 1 || maxCols < 1) return;
+
+    sheet
+      .getRange(1, 1, maxRows, maxCols)
+      .setFontFamily(fontFamily)
+      .setFontSize(fontSize);
+  });
 }
 
 /**

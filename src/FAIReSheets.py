@@ -42,6 +42,7 @@ from src.helpers.sample_metadata_sheet import create_sample_metadata_sheet
 from src.helpers.experiment_metadata_sheet import create_experiment_metadata_sheet
 from src.helpers.taxa_sheets import create_taxa_sheets
 from src.helpers.targeted_sheets import create_targeted_sheets
+from src.helpers.font_standardization import standardize_font_across_spreadsheet
 
 def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
                 sample_type=None, 
@@ -433,4 +434,8 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         pbar.set_description("Template generation complete!")
         pbar.close()
     
+    # Standardize font across the entire spreadsheet (every sheet, every cell).
+    # This updates ONLY font family + size via a fields mask, leaving background/bold/etc. intact.
+    standardize_font_across_spreadsheet(spreadsheet)
+
     print("\nTemplate generation complete!")

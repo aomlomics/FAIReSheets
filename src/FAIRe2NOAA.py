@@ -31,6 +31,7 @@ from src.helpers.FAIRe2NOAA_helpers import (
     update_noaa_vocab_dropdowns,
     show_next_steps_page
 )
+from src.helpers.font_standardization import standardize_font_across_spreadsheet
 
 def FAIRe2NOAA(client=None, project_id=None):
     """
@@ -137,6 +138,10 @@ def FAIRe2NOAA(client=None, project_id=None):
             spreadsheet.update_title(new_title)
         else:
             pass
+
+        # Standardize font across the final spreadsheet (every sheet, every cell).
+        # This updates ONLY font family + size via a fields mask, leaving background/bold/etc. intact.
+        standardize_font_across_spreadsheet(spreadsheet)
 
         # Show the next steps page
         show_next_steps_page()
