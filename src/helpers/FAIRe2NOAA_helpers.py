@@ -1797,10 +1797,57 @@ def update_noaa_vocab_dropdowns(spreadsheet, noaa_checklist_path):
         raise Exception(f"Error updating NOAA vocabulary dropdowns: {e}")
 
 
+def _is_rate_limit_error(e):
+    """
+    Returns True if the exception looks like a Google Sheets API rate limit (HTTP 429).
+    """
+    return "429" in str(e)
+
+
+def _run_with_429_retry(fn, *, max_attempts=6, base_sleep_seconds=10, max_sleep_seconds=60):
+    """
+    Run a function that makes Sheets API writes, retrying on HTTP 429.
+    
+    Why: The Sheets API has per-minute write quotas. Even with batch updates, large
+    templates can occasionally hit the limit. Retrying with backoff makes this step
+    resilient without requiring users to shrink descriptions/vocabulary.
+    """
+    last_exc = None
+    for attempt in range(max_attempts):
+        try:
+            return fn()
+        except gspread.exceptions.APIError as e:
+            last_exc = e
+            if not _is_rate_limit_error(e):
+                raise
+            sleep_s = min(max_sleep_seconds, base_sleep_seconds * (2 ** attempt))
+            time.sleep(sleep_s)
+    # If we exhausted retries, re-raise the last error for visibility.
+    raise last_exc
+
+
+def _batch_update_requests_with_retry(spreadsheet, requests, *, chunk_size=200):
+    """
+    Send Sheets API batchUpdate requests in chunks, with 429 retry.
+    
+    Note: Each `batch_update` call counts as a single write request, so chunking too
+    small can increase quota pressure. We default to a moderately large chunk.
+    """
+    if not requests:
+        return
+    for i in range(0, len(requests), chunk_size):
+        batch = requests[i:i + chunk_size]
+        _run_with_429_retry(lambda: spreadsheet.batch_update({"requests": batch}))
+
+
 def _update_sheet_dropdowns(worksheet, vocab_map):
     """
     Update data validation dropdowns in a metadata sheet based on vocab_map.
-    Handles long-format sheets where term_name is in a column (usually column 3).
+    
+    Handles BOTH:
+    - Long-format sheets (e.g., projectMetadata) where `term_name` is a column header.
+    - Wide-format sheets (e.g., sampleMetadata, experimentRunMetadata) where term names
+      are in a specific row and the user fills data in rows below.
     
     Args:
         worksheet (gspread.Worksheet): The worksheet to update
@@ -1810,56 +1857,46 @@ def _update_sheet_dropdowns(worksheet, vocab_map):
         data = worksheet.get_all_values()
         if not data or len(data) < 2:
             return
-        
-        # For long-format sheets, find the header row and identify the term_name column
-        header_row = None
-        term_name_col_idx = None
-        
-        for idx in range(min(10, len(data))):
-            row = data[idx]
-            # Look for common header markers
-            if 'term_name' in row or 'term' in row or (len(row) > 2 and any(term in row for term in vocab_map.keys())):
-                header_row = idx
-                # Find which column has term_name or contains our vocab terms
-                for col_idx, cell in enumerate(row):
-                    if cell == 'term_name' or cell == 'term':
-                        term_name_col_idx = col_idx
-                        break
-                # If no header found, look for vocab terms to identify term column
-                if term_name_col_idx is None:
-                    for col_idx, cell in enumerate(row):
-                        if cell in vocab_map:
-                            term_name_col_idx = col_idx
-                            break
-                break
-        
-        if header_row is None or term_name_col_idx is None:
-            return
-        
-        # Build validation requests for each row with a vocab term
-        validation_requests = []
-        
-        for row_idx in range(header_row + 1, len(data)):
-            row = data[row_idx]
-            if term_name_col_idx >= len(row):
-                continue
-            
-            term_name = row[term_name_col_idx]
-            if term_name not in vocab_map:
-                continue
-            
-            cv_values = vocab_map[term_name]
-            
-            # Update dropdowns for ALL columns after term_name (project_level + assay columns)
-            for col_idx in range(term_name_col_idx + 1, len(row)):
+
+        # ----- Case 1: Long-format sheet (row 1 is headers incl. term_name) -----
+        headers = data[0]
+        if 'term_name' in headers:
+            term_name_col_idx = headers.index('term_name')
+
+            # In projectMetadata, dropdowns are intended for `project_level` + assay columns.
+            # If `project_level` isn't present, fall back to the column immediately after term_name.
+            if 'project_level' in headers:
+                start_value_col_idx = headers.index('project_level')
+            else:
+                start_value_col_idx = min(term_name_col_idx + 1, len(headers))
+
+            end_value_col_idx = len(headers)
+            if start_value_col_idx >= end_value_col_idx:
+                return
+
+            validation_requests = []
+            for row_idx in range(1, len(data)):  # Skip header
+                row = data[row_idx]
+                if term_name_col_idx >= len(row):
+                    continue
+                term_name = row[term_name_col_idx]
+                if term_name not in vocab_map:
+                    continue
+
+                cv_values = vocab_map.get(term_name, [])
+                if not cv_values:
+                    continue
+
+                # IMPORTANT: Apply one rule across the entire value-entry range for this row.
+                # This avoids per-cell validation updates which can easily hit API write quotas.
                 validation_requests.append({
                     "setDataValidation": {
                         "range": {
                             "sheetId": worksheet.id,
                             "startRowIndex": row_idx,
                             "endRowIndex": row_idx + 1,
-                            "startColumnIndex": col_idx,
-                            "endColumnIndex": col_idx + 1
+                            "startColumnIndex": start_value_col_idx,
+                            "endColumnIndex": end_value_col_idx
                         },
                         "rule": {
                             "condition": {
@@ -1871,12 +1908,66 @@ def _update_sheet_dropdowns(worksheet, vocab_map):
                         }
                     }
                 })
-        
-        # Apply validation requests in batches of 100 to avoid API limits
-        if validation_requests:
-            for i in range(0, len(validation_requests), 100):
-                batch = validation_requests[i:i+100]
-                worksheet.spreadsheet.batch_update({"requests": batch})
+
+            _batch_update_requests_with_retry(worksheet.spreadsheet, validation_requests)
+            return
+
+        # ----- Case 2: Wide-format sheet (term names appear in a row) -----
+        # Heuristic: pick the row (near the top) with the most cells matching vocab_map keys.
+        # This avoids hard-coding row labels that can differ between templates.
+        max_scan_rows = min(50, len(data))
+        best_row_idx = None
+        best_match_count = 0
+
+        for idx in range(max_scan_rows):
+            row = data[idx]
+            match_count = sum(1 for cell in row if cell in vocab_map)
+            if match_count > best_match_count:
+                best_match_count = match_count
+                best_row_idx = idx
+
+        if best_row_idx is None or best_match_count == 0:
+            return
+
+        term_name_row_idx = best_row_idx
+        term_row = data[term_name_row_idx]
+
+        # Apply validations to a reasonable data-entry range below the term row.
+        # These templates typically reserve 10-20 rows for entry; using 50 stays safe and doesn't add extra API calls.
+        start_row_idx = term_name_row_idx + 1
+        end_row_idx = min(term_name_row_idx + 51, worksheet.row_count)
+        if start_row_idx >= end_row_idx:
+            return
+
+        validation_requests = []
+        for col_idx, term_name in enumerate(term_row):
+            if term_name not in vocab_map:
+                continue
+            cv_values = vocab_map.get(term_name, [])
+            if not cv_values:
+                continue
+
+            validation_requests.append({
+                "setDataValidation": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "startRowIndex": start_row_idx,
+                        "endRowIndex": end_row_idx,
+                        "startColumnIndex": col_idx,
+                        "endColumnIndex": col_idx + 1
+                    },
+                    "rule": {
+                        "condition": {
+                            "type": "ONE_OF_LIST",
+                            "values": [{"userEnteredValue": v} for v in cv_values]
+                        },
+                        "showCustomUi": True,
+                        "strict": False
+                    }
+                }
+            })
+
+        _batch_update_requests_with_retry(worksheet.spreadsheet, validation_requests)
             
     except Exception as e:
         raise Exception(f"Error updating sheet dropdowns: {e}")
@@ -1932,7 +2023,7 @@ def _update_dropdown_values_sheet(worksheet, vocab_map):
                     df.loc[mask, col_name] = value
         
         # Clear worksheet and write updated data
-        worksheet.clear()
+        _run_with_429_retry(lambda: worksheet.clear())
         
         # Prepare data for update (convert NaN to empty strings)
         data_to_write = [df.columns.tolist()]
@@ -1946,14 +2037,14 @@ def _update_dropdown_values_sheet(worksheet, vocab_map):
             data_to_write.append(row_data)
         
         # Write data
-        worksheet.update('A1', data_to_write)
+        _run_with_429_retry(lambda: worksheet.update('A1', data_to_write))
         
         # Format headers
-        worksheet.format('1:1', {
+        _run_with_429_retry(lambda: worksheet.format('1:1', {
             "textFormat": {
                 "bold": True
             }
-        })
+        }))
         
     except Exception as e:
         raise Exception(f"Error updating Drop-down values sheet: {e}")
