@@ -146,21 +146,98 @@ function onOpen() {
  */
 const COLUMN_OR_FIELD_ORDER = {
   projectMetadata: [
+// Core project information
     "project_id",
-    "assay_type",
-    "assay_name",
+    "project_name",
+    "parent_project_id",
+    "institution",
+    "institutionID",
+    "recordedBy",
+    "recordedByID",
+    "project_contact",
+    "sample_type",    
+    "study_factor",
+    "expedition_id",
+    "ship_crs_expocode",
+    "woce_sect",
+    "bioproject_accession",
+    "projectDescription", 
+    "dataDescription",
+// Data Management Info    
     "checkls_ver",
+    "mod_date",
+    "license",
+    "rightsHolder",
+    "accessRights",
+    "informationWithheld",
+    "dataGeneralizations",
+    "bibliographicCitation",
+    "associated_resource",
+    "code_repo",
+    "biological_rep",
+// Assay and PCR Info
+    "assay_name",
+    "assay_type",
+    "assay_name_alternate",
+    "assay_reference",
+    "sterilise_method",
+    "neg_cont_0_1",
+    "pos_cont_0_1",
+    "pcr_primer_forward",
+    "pcr_primer_reverse",
+    "pcr_primer_name_forward",
+    "pcr_primer_name_reverse",
+    "pcr_primer_reference_forward",
+    "pcr_primer_reference_reverse",
+    "pcr_primer_name_published_forward",
+    "pcr_primer_name_published_reverse",
+    "pcr_primer_vol_forward",
+    "pcr_primer_vol_reverse",
+    "pcr_primer_conc_forward",
+    "pcr_primer_conc_reverse",
+    "pcr_0_1",
+    "inhibition_check_0_1",
+    "inhibition_check",
+    "targetTaxonomicAssay",
+    "targetTaxonomicScope",
+    "target_gene",
+    "target",
   ],
   sampleMetadata: [
     "samp_name",
-    "sample_id",
-    "project_id",
-    "assay_name",
+    "sample_type",
+    "samp_category",
+    "pos_cont_type",
+    "neg_cont_type",
+    "short_name",
+    "expedition_id",
+    "expeditionName",
+    "expeditionURL",
+    "expeditionStartDate",
+    "expeditionEndDate",
+    "expeditionLocation",
+    "materialSampleID",
+    "sample_derived_from",
+    "sample_composed_of",
+    "rel_cont_id",
+    "biological_rep_relation",
+    "eventDate",
+    "eventDurationValue",
+    "verbatimEventDate",
+    "verbatimEventTime",
+    "country",
+    "geo_loc_name",
+    "locality",
+    "env_medium",
+    "env_broad_scale",
+    "env_local_scale",
   ],
   experimentRunMetadata: [
-    "project_id",
+    "samp_name",
+    "lib_id",
     "assay_name",
-    "analysis_run_name",
+    "seq_run_id",
+    "pcr_plate_id",
   ],
   analysisMetadata: [
     "project_id",
@@ -519,6 +596,16 @@ function reorderMetadataSheets() {
   ui.alert(results.filter(Boolean).join("\n\n"));
 }
 
+function isWideMetadataSheetLayout_(sheet) {
+  // sampleMetadata / experimentRunMetadata layout:
+  // row 1 col 1: "# requirement_level_code"
+  // row 2 col 1: "# section"
+  // row 3: term/field headers (e.g., samp_name in column 1)
+  const a1 = (sheet.getRange(1, 1).getValue() || "").toString().trim();
+  const a2 = (sheet.getRange(2, 1).getValue() || "").toString().trim();
+  return a1 === "# requirement_level_code" && a2 === "# section";
+}
+
 function reorderWideFormByHeader_(sheet, desiredHeaderOrder, labelForMessages) {
   if (!desiredHeaderOrder || desiredHeaderOrder.length === 0) {
     return `No column order list provided for "${labelForMessages}". Nothing changed.`;
@@ -528,7 +615,8 @@ function reorderWideFormByHeader_(sheet, desiredHeaderOrder, labelForMessages) {
   const maxRows = sheet.getMaxRows();
   if (lastCol < 1 || maxRows < 1) return `Skipped "${labelForMessages}" (empty sheet).`;
 
-  const headerRow = findBestHeaderRow_(sheet, desiredHeaderOrder, 50);
+  const isWideMeta = isWideMetadataSheetLayout_(sheet);
+  const headerRow = isWideMeta ? 3 : findBestHeaderRow_(sheet, desiredHeaderOrder, 50);
   const headerValues = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
 
   const colByHeader = {};
@@ -540,7 +628,9 @@ function reorderWideFormByHeader_(sheet, desiredHeaderOrder, labelForMessages) {
   const moved = [];
   const missing = [];
 
-  let destCol = 1;
+  // In wide-metadata layout, column 1 is special (it contains the row labels in rows 1-2,
+  // and the leftmost key field in row 3). We keep it fixed so the sheet doesn't "break".
+  let destCol = isWideMeta ? 2 : 1;
   desiredHeaderOrder.forEach(header => {
     const key = (header || "").toString().trim();
     if (!key) return;
@@ -548,6 +638,13 @@ function reorderWideFormByHeader_(sheet, desiredHeaderOrder, labelForMessages) {
     const srcCol = colByHeader[key];
     if (srcCol == null) {
       missing.push(key);
+      return;
+    }
+
+    // Never move the first column on wide-metadata sheets.
+    // If the user includes the column-1 header (e.g., samp_name) in the list, treat it as already placed.
+    if (isWideMeta && srcCol === 1) {
+      moved.push(key);
       return;
     }
 
