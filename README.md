@@ -125,12 +125,49 @@ function onOpen() {
       .createMenu('FAIReSheets Tools')
       .addItem('Download all sheets as TSV', 'exportSheetsAsTsv')
       .addItem('Standardize font across all sheets', 'standardizeFontAcrossAllSheets')
+      .addSeparator()
+      .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
       .addToUi();
 
   // Auto-run font standardization once (no user action required).
   // Uses Document Properties so it runs only the first time after the script is added/updated.
   standardizeFontAcrossAllSheetsOnce_();
 }
+
+/**
+ * Column/field ordering lists (optional).
+ *
+ * - sampleMetadata / experimentRunMetadata: these are COLUMN headers to move to the front in this order.
+ * - projectMetadata / analysisMetadata: these are term_name values (ROWS) to move to the top in this order.
+ *
+ * Anything not listed is left in place (and the script will NOT error if a listed item is missing).
+ *
+ * Tip: you can keep these short (just "pin" your most important fields first), or make them exhaustive.
+ */
+const COLUMN_OR_FIELD_ORDER = {
+  projectMetadata: [
+    "project_id",
+    "assay_type",
+    "assay_name",
+    "checkls_ver",
+  ],
+  sampleMetadata: [
+    "samp_name",
+    "sample_id",
+    "project_id",
+    "assay_name",
+  ],
+  experimentRunMetadata: [
+    "project_id",
+    "assay_name",
+    "analysis_run_name",
+  ],
+  analysisMetadata: [
+    "project_id",
+    "assay_name",
+    "analysis_run_name",
+  ],
+};
 
 /**
  * Runs standardizeFontAcrossAllSheets() only once per spreadsheet (unless you change the key).
@@ -412,6 +449,226 @@ function clearErrorFormatting(spreadsheet) {
         }
       }
     }
+  });
+}
+
+/**
+ * Reorders only the main metadata sheets by moving entire columns/rows in-place,
+ * so data validation, conditional formatting, notes, etc. move with them.
+ */
+function reorderMetadataSheets() {
+  const ui = SpreadsheetApp.getUi();
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+  const confirmMessage =
+    "This will reorder columns/fields in:\n" +
+    "- projectMetadata\n" +
+    "- sampleMetadata\n" +
+    "- experimentRunMetadata\n" +
+    "- analysisMetadata* (all sheets whose name starts with 'analysisMetadata')\n\n" +
+    "It moves existing rows/columns in-place (no copying), skips missing fields, and should preserve dropdowns and formatting.\n\n" +
+    "Continue?";
+
+  const response = ui.alert("Reorder metadata sheets", confirmMessage, ui.ButtonSet.YES_NO);
+  if (response !== ui.Button.YES) return;
+
+  const results = [];
+
+  // projectMetadata: move term_name rows
+  {
+    const sheet = spreadsheet.getSheetByName("projectMetadata");
+    if (sheet) {
+      results.push(reorderLongFormByTermName_(sheet, COLUMN_OR_FIELD_ORDER.projectMetadata, "projectMetadata"));
+    } else {
+      results.push('Skipped "projectMetadata" (sheet not found).');
+    }
+  }
+
+  // sampleMetadata: move columns by header row
+  {
+    const sheet = spreadsheet.getSheetByName("sampleMetadata");
+    if (sheet) {
+      results.push(reorderWideFormByHeader_(sheet, COLUMN_OR_FIELD_ORDER.sampleMetadata, "sampleMetadata"));
+    } else {
+      results.push('Skipped "sampleMetadata" (sheet not found).');
+    }
+  }
+
+  // experimentRunMetadata: move columns by header row
+  {
+    const sheet = spreadsheet.getSheetByName("experimentRunMetadata");
+    if (sheet) {
+      results.push(reorderWideFormByHeader_(sheet, COLUMN_OR_FIELD_ORDER.experimentRunMetadata, "experimentRunMetadata"));
+    } else {
+      results.push('Skipped "experimentRunMetadata" (sheet not found).');
+    }
+  }
+
+  // analysisMetadata*: move term_name rows for all matching sheets
+  {
+    const analysisSheets = spreadsheet.getSheets().filter(s => s.getName().startsWith("analysisMetadata"));
+    if (analysisSheets.length === 0) {
+      results.push('Skipped "analysisMetadata*" (no matching sheets found).');
+    } else {
+      analysisSheets.forEach(s => {
+        results.push(reorderLongFormByTermName_(s, COLUMN_OR_FIELD_ORDER.analysisMetadata, s.getName()));
+      });
+    }
+  }
+
+  ui.alert(results.filter(Boolean).join("\n\n"));
+}
+
+function reorderWideFormByHeader_(sheet, desiredHeaderOrder, labelForMessages) {
+  if (!desiredHeaderOrder || desiredHeaderOrder.length === 0) {
+    return `No column order list provided for "${labelForMessages}". Nothing changed.`;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const maxRows = sheet.getMaxRows();
+  if (lastCol < 1 || maxRows < 1) return `Skipped "${labelForMessages}" (empty sheet).`;
+
+  const headerRow = findBestHeaderRow_(sheet, desiredHeaderOrder, 50);
+  const headerValues = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
+
+  const colByHeader = {};
+  headerValues.forEach((h, idx) => {
+    if (!h) return;
+    if (colByHeader[h] == null) colByHeader[h] = idx + 1; // 1-based
+  });
+
+  const moved = [];
+  const missing = [];
+
+  let destCol = 1;
+  desiredHeaderOrder.forEach(header => {
+    const key = (header || "").toString().trim();
+    if (!key) return;
+
+    const srcCol = colByHeader[key];
+    if (srcCol == null) {
+      missing.push(key);
+      return;
+    }
+
+    if (srcCol !== destCol) {
+      sheet.moveColumns(sheet.getRange(1, srcCol, maxRows, 1), destCol);
+      updateIndexMapAfterMove_(colByHeader, srcCol, destCol);
+    }
+    moved.push(key);
+    destCol += 1;
+  });
+
+  return [
+    `Reordered "${labelForMessages}" using header row ${headerRow}.`,
+    moved.length ? `Moved to front (in order): ${moved.join(", ")}` : "No columns moved.",
+    missing.length ? `Missing (ignored): ${missing.join(", ")}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function reorderLongFormByTermName_(sheet, desiredTermOrder, labelForMessages) {
+  if (!desiredTermOrder || desiredTermOrder.length === 0) {
+    return `No field order list provided for "${labelForMessages}". Nothing changed.`;
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const maxCols = sheet.getMaxColumns();
+  if (lastRow < 2 || lastCol < 1) return `Skipped "${labelForMessages}" (no data rows).`;
+
+  const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
+  let termNameCol = header.indexOf("term_name") + 1; // 1-based
+  if (termNameCol < 1) {
+    // Fall back: search a bit for "term_name" if headers aren't on row 1 for some reason.
+    termNameCol = findCellByValue(sheet, "term_name")?.col || 0;
+  }
+  if (termNameCol < 1) return `Skipped "${labelForMessages}" (could not find "term_name" column).`;
+
+  const termValues = sheet.getRange(2, termNameCol, lastRow - 1, 1).getValues().map(r => (r[0] || "").toString().trim());
+  const rowByTerm = {};
+  termValues.forEach((t, i) => {
+    if (!t) return;
+    if (rowByTerm[t] == null) rowByTerm[t] = i + 2; // actual row number
+  });
+
+  const moved = [];
+  const missing = [];
+
+  let destRow = 2;
+  desiredTermOrder.forEach(term => {
+    const key = (term || "").toString().trim();
+    if (!key) return;
+
+    const srcRow = rowByTerm[key];
+    if (srcRow == null) {
+      missing.push(key);
+      return;
+    }
+
+    if (srcRow !== destRow) {
+      sheet.moveRows(sheet.getRange(srcRow, 1, 1, maxCols), destRow);
+      updateIndexMapAfterMove_(rowByTerm, srcRow, destRow);
+    }
+    moved.push(key);
+    destRow += 1;
+  });
+
+  return [
+    `Reordered "${labelForMessages}" by term_name.`,
+    moved.length ? `Moved to top (in order): ${moved.join(", ")}` : "No rows moved.",
+    missing.length ? `Missing (ignored): ${missing.join(", ")}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function findBestHeaderRow_(sheet, desiredHeaders, maxRowsToScan) {
+  const lastRow = Math.min(sheet.getLastRow(), maxRowsToScan);
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) return 1;
+
+  const desiredSet = {};
+  desiredHeaders.forEach(h => {
+    const key = (h || "").toString().trim();
+    if (key) desiredSet[key] = true;
+  });
+
+  let bestRow = 1;
+  let bestScore = -1;
+
+  const values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  for (let r = 0; r < values.length; r++) {
+    let score = 0;
+    for (let c = 0; c < values[r].length; c++) {
+      const cell = (values[r][c] || "").toString().trim();
+      if (desiredSet[cell]) score += 1;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = r + 1;
+    }
+  }
+
+  return bestRow;
+}
+
+/**
+ * Updates an index map (key -> 1-based index) after a move operation.
+ * Works for both columns and rows.
+ */
+function updateIndexMapAfterMove_(indexMap, srcIndex, destIndex) {
+  if (srcIndex === destIndex) return;
+
+  Object.keys(indexMap).forEach(k => {
+    let idx = indexMap[k];
+    if (idx === srcIndex) {
+      idx = destIndex;
+    } else if (destIndex < srcIndex) {
+      // Moving left/up: items in [destIndex, srcIndex) shift right/down by 1
+      if (idx >= destIndex && idx < srcIndex) idx += 1;
+    } else {
+      // Moving right/down: items in (srcIndex, destIndex] shift left/up by 1
+      if (idx > srcIndex && idx <= destIndex) idx -= 1;
+    }
+    indexMap[k] = idx;
   });
 }
 ```
