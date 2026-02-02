@@ -113,7 +113,18 @@ NOTE: FAIReSheets now standardizes font family + font size across all sheets dur
 2. Click on `Extensions` in the menu, then select `Apps Script`.
 3. Delete any code in the script editor and copy-paste the following code.
    IMPORTANT: Make sure you copy the FULL script starting from `function onOpen()` (the menu will NOT appear if you only paste `exportSheetsAsTsv()`).
-   After saving, reload the Google Sheet tab to trigger `onOpen()` and show the `FAIReSheets Tools` menu.
+   After saving, reload/refresh the Google Sheet tab to trigger `onOpen()` and show a new `FAIReSheets Tools` menu in the Google Sheets UI.
+
+Once the `FAIReSheets Tools` menu appears, you can:
+- Download all sheets as TSV files (for ODE / edna2obis submission)
+- Standardize font across all sheets
+- Reorder `projectMetadata`, `sampleMetadata`, `experimentRunMetadata`, and all `analysisMetadata*` sheets (by moving rows/columns in-place)
+
+The reordering tool:
+- Can be run **before or after** you’ve filled the sheet with data (it moves entire rows/columns, so your entered data moves with the fields)
+- Uses clean ordered lists inside the Apps Script (you can edit them if you want)
+- Will **not** break if you include terms/headers that aren’t present in your sheet (it will skip them)
+- Reports what it moved and what was missing (ignored)
    The first time you run it, Google may ask you to authorize permissions.
 
 ```javascript
@@ -543,7 +554,7 @@ function reorderMetadataSheets() {
     "- sampleMetadata\n" +
     "- experimentRunMetadata\n" +
     "- analysisMetadata* (all sheets whose name starts with 'analysisMetadata')\n\n" +
-    "It moves existing rows/columns in-place (no copying), skips missing fields, and should preserve dropdowns and formatting.\n\n" +
+    "It moves existing rows/columns in-place, skips missing fields, and preserves dropdowns and formatting.\n\n" +
     "Continue?";
 
   const response = ui.alert("Reorder metadata sheets", confirmMessage, ui.ButtonSet.YES_NO);
