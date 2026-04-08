@@ -34,13 +34,20 @@ Before using FAIReSheets, you'll need to request access. This only needs to happ
    git clone https://github.com/aomlomics/FAIReSheets.git
    cd FAIReSheets
    ```
-2. **Set up the Environment**:
+2. **Set up the Environment** (use **either** Conda **or** pip — both install the same Python dependencies):
+
+   **Option A — Conda (recommended if you already use Conda):**
    - Install Conda if you don't have it already.
    - Create and activate the Conda environment:
      ```bash
      conda env create -f environment.yml
      conda activate FAIRe
      ```
+
+   **Option B — pip (Python 3.9+):**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ### Configuration
 1. **Create `.env` file**:

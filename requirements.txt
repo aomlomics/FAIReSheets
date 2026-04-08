@@ -7,6 +7,8 @@ gspread
 gspread_formatting
 google-auth-oauthlib
 google-api-python-client
-requests 
-tqdm 
-openpyxl 
+requests
+tqdm
+pyfiglet
+rich
+openpyxl
