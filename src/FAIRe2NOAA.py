@@ -1,8 +1,8 @@
 """
-FAIRe2NOAA - Converts FAIReSheets templates to NOAA Ocean DNA Explorer input format.
+FAIRe2NOAA - Converts FAIReSheets templates to the FAIRe-NOAA format.
 
 This script takes a FAIReSheets-generated Google Sheet and modifies it to be compatible
-with Ocean DNA Explorer submission requirements. It removes bioinformatics fields and
+with FAIRe-NOAA requirements used by the Ocean DNA Explorer portal. It removes bioinformatics fields and
 adds NOAA-specific fields as needed.
 """
 
@@ -35,7 +35,7 @@ from src.helpers.api_retry import retry_on_429
 
 def FAIRe2NOAA(client=None, project_id=None):
     """
-    Convert FAIReSheets template to Ocean DNA Explorer format.
+    Convert a FAIReSheets template to FAIRe-NOAA format.
 
     Args:
         client (gspread.Client, optional): Pre-authenticated client. If None, will create one.

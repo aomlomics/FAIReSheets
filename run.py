@@ -38,7 +38,7 @@ console.print(
 )
 console.print(
     "It can create standard FAIR eDNA metadata templates and "
-    "Ocean DNA Explorer-compatible FAIR eDNA metadata templates.\n"
+    "FAIRe-NOAA FAIR eDNA metadata templates for Ocean DNA Explorer submission.\n"
 )
 console.print(
     "First-time users will be prompted to authenticate with Google.\n"
@@ -111,18 +111,18 @@ def main():
             )
         
         if run_noaa_formatting:
-            # Step 2: Convert to Ocean DNA Explorer format (spinner)
+            # Step 2: Convert to FAIRe-NOAA format (spinner)
             console.print(
-                "\nStep 2: Converting to Ocean DNA Explorer format...", style="bold"
+                "\nStep 2: Converting to FAIRe-NOAA format...", style="bold"
             )
             with console.status(
-                "[bold cyan]Converting to Ocean DNA Explorer format...[/bold cyan]",
+                "[bold cyan]Converting to FAIRe-NOAA format...[/bold cyan]",
                 spinner="dots",
             ):
                 FAIRe2NOAA(client=client, project_id=project_id)
             
             console.print(
-                "\nAll done! Your Ocean DNA Explorer-compatible template is ready!",
+                "\nAll done! Your FAIRe-NOAA template is ready for Ocean DNA Explorer submission!",
                 style="bold green",
             )
         else:
