@@ -143,7 +143,6 @@ function onOpen() {
       .createMenu('FAIReSheets Tools')
       .addItem('Download all sheets as TSV', 'exportSheetsAsTsv')
       .addItem('Standardize font across all sheets', 'standardizeFontAcrossAllSheets')
-      .addSeparator()
       .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
       .addToUi();
 
