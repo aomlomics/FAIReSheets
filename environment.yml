@@ -1,4 +1,4 @@
-name: FAIRe
+name: FAIReSheets
 channels:
   - conda-forge
   - defaults
