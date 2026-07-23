@@ -9,6 +9,9 @@ FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.ht
 NOTE: FAIReSheets generates BLANK templates. You must fill them in with data manually after they're generated.
 
 ### Quick Start Summary
+Need help running FAIReSheets?  
+[![Watch tutorial on YouTube](https://img.shields.io/badge/YouTube-Watch%20the%20tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/dE2g6FswuA0?si=8UNWfRzU_hjMRMFY)
+
 Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with the Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and optionally in `NOAA_config.yaml` if you want FAIRe-NOAA templates, follow the authentication workflow (on your browser), and run `python run.py`.
 
 ---
@@ -41,7 +44,7 @@ Before using FAIReSheets, you'll need to request access. This only needs to happ
    - Create and activate the Conda environment:
      ```bash
      conda env create -f environment.yml
-     conda activate FAIRe
+     conda activate FAIReSheets
      ```
 
    **Option B — pip (Python 3.9+):**
