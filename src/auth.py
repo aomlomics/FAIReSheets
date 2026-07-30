@@ -16,7 +16,7 @@ from google.auth.transport.requests import Request
 from dotenv import load_dotenv
 
 # Define scopes needed for Google Sheets
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 def download_client_secrets():
     """Download client secrets file from GitHub Gist URL specified in .env."""
