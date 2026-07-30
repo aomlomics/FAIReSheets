@@ -1,6 +1,10 @@
-<div align="center">
+<div align="left">
+  <img src="src/helpers/fairesheets_icon_final.png" alt="FAIReSheets Icon" width="120">
+  <br/>
   <img src="src/helpers/banner_fairesheets.png" alt="FAIReSheets Banner" width="800">
 </div>
+
+<br/>
 
 FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to customizable Google Sheets templates. FAIReSheets can be run in one of 2 modes:
 1. **FAIR eDNA:** Generate FAIR eDNA data templates from the FAIRe checklist
