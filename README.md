@@ -12,6 +12,9 @@ FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.ht
 
 NOTE: FAIReSheets generates BLANK templates. You must fill them in with data manually after they're generated.
 
+### Official Documentation
+FAIReSheets documentation is maintained by the NOAA 'Omics Data Management Guide (DMG). See the official [FAIReSheets Overview](https://noaa-omics-dmg.readthedocs.io/en/latest/fairesheets.html) and [FAIReSheets Privacy Policy](https://noaa-omics-dmg.readthedocs.io/en/latest/fairesheets-privacy.html).
+
 ### Quick Start Summary
 Need help running FAIReSheets?  
 [![Watch tutorial on YouTube](https://img.shields.io/badge/YouTube-Watch%20the%20tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/dE2g6FswuA0?si=8UNWfRzU_hjMRMFY)
