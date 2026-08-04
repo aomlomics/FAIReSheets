@@ -16,7 +16,7 @@ NOTE: FAIReSheets generates BLANK templates. You must fill them in with data man
 Need help running FAIReSheets?  
 [![Watch tutorial on YouTube](https://img.shields.io/badge/YouTube-Watch%20the%20tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/dE2g6FswuA0?si=8UNWfRzU_hjMRMFY)
 
-Email bayden.willms@noaa.gov to be added to the user list and receive the link to the credentials file, create a blank Google Sheet, configure the `.env` file with the Google Sheet ID and the Git Gist URL, specify your parameters in `config.yaml` and optionally in `NOAA_config.yaml` if you want FAIRe-NOAA templates, follow the authentication workflow (on your browser), and run `python run.py`.
+**Authentication update:** FAIReSheets is now a Google-verified OAuth app! If you previously used FAIReSheets or followed the video tutorial, you no longer need to email bayden.willms@noaa.gov for access or a Gist URL, and `GIST_URL` is no longer needed in your `.env` file. Create a blank Google Sheet, add its ID to `.env`, configure `config.yaml` and optionally `NOAA_config.yaml`, and run `python run.py`. Your browser will guide you through Google authentication on the first run.
 
 ---
 ### Table of Contents
@@ -28,12 +28,7 @@ Email bayden.willms@noaa.gov to be added to the user list and receive the link t
 ---
 
 ### Prerequisites
-Before using FAIReSheets, you'll need to request access. This only needs to happen once:
-1. **Request Access**: 
-   - Email bayden.willms@noaa.gov with the subject "FAIReSheets Access Request".
-   - Include the email address associated with your Google account. For NOAA users, use your @noaa.gov email.
-2. **Receive Credentials**: 
-   - Once approved, you'll receive an email with a link to a private Git Gist. This Gist contains the `client_secrets.json` and `token.json`, which are files needed for authentication.
+Before using FAIReSheets, create a blank Google Sheet. FAIReSheets is verified by Google, so users no longer need to request access, join an approved-user list, or obtain authentication files through a private Git Gist.
 
 ### Installation
 1. **Clone the Repository**:
@@ -58,15 +53,14 @@ Before using FAIReSheets, you'll need to request access. This only needs to happ
 
 ### Configuration
 1. **Create `.env` file**:
-   - In the FAIReSheets directory, create a `.env` file. Or alternatively, if you run FAIReSheets without having a `.env` file, one will be created for you. Note that you will still need to fill in the Git Gist URL and Spreadsheet ID to that `.env`.
+   - In the FAIReSheets directory, create a `.env` file. Alternatively, run FAIReSheets without one and the file will be created for you. You will still need to add your Spreadsheet ID.
 2. **Configure `.env` file**:
    - Open the `.env` file and add the following, replacing the placeholder text with your actual information:
      ```
      SPREADSHEET_ID=your_spreadsheet_id_here
-     GIST_URL=your_gist_url_here
      ```
    - `SPREADSHEET_ID`: This is the ID of the Google Sheet you want to populate. You can find it in the URL of your Google Sheet, between the **/d/** and **/edit**: `https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit`.
-   - `GIST_URL`: The GIST_URL will be sent to you via email after you've been granted access to FAIReSheets (see first section).
+   - Existing users may remove the deprecated `GIST_URL` entry from their `.env` file; FAIReSheets no longer reads it.
 
 3. **Customize your FAIRe checklist:**
    - The FAIRe data checklist is designed to be customizable. If you have data fields that are not included in the checklist, you can manually add them into the checklist as User Defined fields, and your changes will be reflected in the templates you generate. We recommend trying your best to align your custom fields with fields in existing eDNA data standards, like Darwin Core or MIXs.
@@ -100,20 +94,17 @@ This will:
 #### First-Time Authentication
 When you run FAIReSheets for the first time, the following will happen:
 1. A browser window will open, prompting you to log in to your Google account. 
-   - **Important**: Use the same Google account you provided when requesting access.
-2. After logging in, you'll be asked to grant permission to FAIReSheets to access your Google Sheets
-3. Once you grant permission, a `token.json` file will be created in the project directory. This file stores your authentication token, so you won't have to log in every time you run the tool.
+2. Google will identify FAIReSheets as a verified app and ask you to grant it permission to access your Google Sheets.
+3. Once you grant permission, a `token.json` file will be created in the project directory. This file stores your authentication token, so you won't have to log in every time you run the tool. Do not share or commit this file.
 
 ### Troubleshooting
-- **Problem**: "User is not on the approved list"
-  - **Solution**: You need to be on the approved users list to run this tool. Email bayden.willms@noaa.gov to request access.
+- **Problem**: Older instructions say to request access or configure `GIST_URL` by emailing bayden.willms@noaa.gov. Do I still need to do that?
+  - **Solution**: These authentication steps are deprecated. Please 'git pull' the latest version of FAIReSheets, remove `GIST_URL` from your local `.env`, and run the application to use the new verified browser authentication flow.
 - **Problem**: Authentication errors (e.g., "invalid_grant")
   - **Solution**: Delete the `token.json` file and run the tool again. This will re-trigger the authentication process.
-  - **Solution**: Make sure you're using the Google account email you provided when requesting access, and that you checked the boxes to allow FAIReSheets to edit Google Sheets in your Google Drive.
+  - **Solution**: Make sure you granted FAIReSheets permission to edit Google Sheets.
 - **Problem**: Errors when running FAIReSheets
   - **Solution**: Make sure the Google Sheet that FAIReSheets is editing is **EMPTY**. You can use Google Drive's built in Restore History button before running FAIReSheets again, or, make a new Google Sheet and replace the Spreadsheet ID in the `.env` file. 
-- **Problem**: Missing `client_secrets.json` or `token.json`
-  - **Solution**: Make sure you've downloaded these files from the Git Gist and placed them in the root of the project directory.
 
 ## Optional (recommended): Google Apps Script
 
