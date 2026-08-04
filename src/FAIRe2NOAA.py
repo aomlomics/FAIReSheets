@@ -54,7 +54,14 @@ def FAIRe2NOAA(client=None, project_id=None):
         raise ValueError("SPREADSHEET_ID not found in .env file. Please create a .env file with SPREADSHEET_ID=your_sheet_id")
 
     # Open the spreadsheet
-    spreadsheet = client.open_by_key(spreadsheet_id)
+    try:
+        spreadsheet = client.open_by_key(spreadsheet_id)
+    except gspread.exceptions.SpreadsheetNotFound as error:
+        raise ValueError(
+            "Google could not find the spreadsheet configured in SPREADSHEET_ID. "
+            "Confirm that the ID is copied from between /d/ and /edit in the "
+            "Google Sheet URL and that the authenticated account can open it."
+        ) from error
 
     # Load NOAA config
     config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'NOAA_config.yaml')

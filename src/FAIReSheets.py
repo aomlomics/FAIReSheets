@@ -137,7 +137,14 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     print("Starting template generation...")
     
     # Open the spreadsheet
-    spreadsheet = client.open_by_key(spreadsheet_id)
+    try:
+        spreadsheet = client.open_by_key(spreadsheet_id)
+    except gspread.exceptions.SpreadsheetNotFound as error:
+        raise ValueError(
+            "Google could not find the spreadsheet configured in SPREADSHEET_ID. "
+            "Confirm that the ID is copied from between /d/ and /edit in the "
+            "Google Sheet URL and that the authenticated account can open it."
+        ) from error
     
     # Update the spreadsheet title to include the project_id
     spreadsheet.update_title(f"FAIRe_{project_id}")

@@ -42,8 +42,6 @@ console.print(
 )
 console.print(
     "First-time users will be prompted to authenticate with Google.\n"
-    "NOTE: You must be on the approved users list to use this tool.\n"
-    "To request access, email bayden.willms@noaa.gov\n"
 )
 
 def main():
@@ -55,9 +53,8 @@ def main():
     if not os.path.exists('.env'):
         with open('.env', 'w') as f:
             f.write('SPREADSHEET_ID=your_spreadsheet_id_here\n')
-            f.write('GIST_URL=your_gist_url_here\n')
         console.print(
-            "\nCreated .env file. Please edit it with your spreadsheet ID and Gist URL.",
+            "\nCreated .env file. Please edit it with your spreadsheet ID.",
             style="bold yellow",
         )
         return
