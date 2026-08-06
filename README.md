@@ -4,7 +4,9 @@
   <img src="src/helpers/banner_fairesheets.png" alt="FAIReSheets Banner" width="800">
 </div>
 
-<br/>
+<blockquote>
+  <p>⚠️ <strong>Google verification update (August 5, 2026):</strong> FAIReSheets is now a Google verified OAuth app. If you have recently run into errors, please <strong>pull the latest version</strong> (<code>git pull</code>). You no longer need <code>GIST_URL</code> in your <code>.env</code> file — just your <code>SPREADSHEET_ID</code>.</p>
+</blockquote>
 
 FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to customizable Google Sheets templates. FAIReSheets can be run in one of 2 modes:
 1. **FAIR eDNA:** Generate FAIR eDNA data templates from the FAIRe checklist
@@ -792,9 +794,15 @@ function updateIndexMapAfterMove_(indexMap, srcIndex, destIndex) {
 5. Close the Apps Script editor.
 
 ### Preparing Your Data for the Ocean DNA Explorer (ODE)
+
+<br/>
+
 <div align="center">
-  <img src="src/helpers/node_logo_light_mode.svg" alt="Ocean DNA Explorer Logo" width="200">
+  <img src="src/helpers/node_logo_light_mode.svg" alt="Ocean DNA Explorer Logo" width="480">
 </div>
+
+<br/>
+<br/>
 
 For submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and to [edna2obis](https://github.com/aomlomics/edna2obis), you will need to download your data sheets (once you have filled them with data) as TSV files. The Google Apps Script you'll add to your sheet includes a tool to make this easy:
 
