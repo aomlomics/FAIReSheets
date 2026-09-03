@@ -23,6 +23,14 @@ Need help running FAIReSheets?
 
 **Authentication update:** FAIReSheets is now a Google-verified OAuth app! If you previously used FAIReSheets or followed the video tutorial, you no longer need to email bayden.willms@noaa.gov for access or a Gist URL, and `GIST_URL` is no longer needed in your `.env` file. Create a blank Google Sheet, add its ID to `.env`, configure `config.yaml` and optionally `NOAA_config.yaml`, and run `python run.py`. Your browser will guide you through Google authentication on the first run.
 
+## Who is using FAIReSheets?
+
+FAIReSheets is now Google verified, so you no longer need to email for access, but now I don't know who is using it!
+
+If you're open to it, please reach out to me via email and include your institution or lab name (and logo). With your permission, I'd like to include your lab's logo here to document this repository's use.
+
+Email: ``bayden.willms@noaa.gov``
+
 ---
 ### Table of Contents
 1. [Prerequisites](#Prerequisites)
