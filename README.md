@@ -27,7 +27,7 @@ Need help running FAIReSheets?
 
 FAIReSheets is now Google verified, so you no longer need to email for access, but now I don't know who is using it!
 
-This is ``completely optional``, but we would appreciate if you reached out to us via email (bayden.willms@noaa.gov) and briefly tell us about your research and lab. This is used internally.
+This is ``completely optional``, but we would appreciate if you reached out to us via email (bayden.willms@noaa.gov) and briefly tell us about your research and lab.
 
 ---
 ### Table of Contents
