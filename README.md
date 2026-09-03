@@ -155,7 +155,6 @@ function onOpen() {
       .addItem('Download all sheets as TSV', 'exportSheetsAsTsv')
       .addItem('Standardize font across all sheets', 'standardizeFontAcrossAllSheets')
       .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
-      .addItem('Check/Refresh merged cells', 'highlightMergedCells')
       .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
       .addToUi();
 
@@ -579,37 +578,48 @@ function reorderMetadataSheets() {
   const response = ui.alert("Reorder metadata sheets", confirmMessage, ui.ButtonSet.YES_NO);
   if (response !== ui.Button.YES) return;
 
+  // Check which sheets have merged cells (moveColumns/moveRows will error on those).
+  const mergedCellSheets = {};
+  spreadsheet.getSheets().forEach(sheet => {
+    const merged = sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).getMergedRanges();
+    if (merged.length > 0) {
+      merged.forEach(range => range.setBackground("yellow"));
+      mergedCellSheets[sheet.getName()] = merged.length;
+    }
+  });
+
   const results = [];
 
-  // projectMetadata: move term_name rows
-  {
-    const sheet = spreadsheet.getSheetByName("projectMetadata");
-    if (sheet) {
-      results.push(reorderLongFormByTermName_(sheet, COLUMN_OR_FIELD_ORDER.projectMetadata, "projectMetadata"));
-    } else {
-      results.push('Skipped "projectMetadata" (sheet not found).');
+  // Helper: attempt reorder only if the sheet has no merged cells.
+  function reorderIfNoMerges(sheet, reorderFn, orderList, label) {
+    if (!sheet) {
+      results.push(`Skipped "${label}" (sheet not found).`);
+      return;
     }
+    if (mergedCellSheets[sheet.getName()]) {
+      results.push(`⚠️ Skipped "${label}" — ${mergedCellSheets[sheet.getName()]} merged range(s) found and highlighted in yellow. Please unmerge them and try again.`);
+      return;
+    }
+    results.push(reorderFn(sheet, orderList, label));
   }
+
+  // projectMetadata: move term_name rows
+  reorderIfNoMerges(
+    spreadsheet.getSheetByName("projectMetadata"),
+    reorderLongFormByTermName_, COLUMN_OR_FIELD_ORDER.projectMetadata, "projectMetadata"
+  );
 
   // sampleMetadata: move columns by header row
-  {
-    const sheet = spreadsheet.getSheetByName("sampleMetadata");
-    if (sheet) {
-      results.push(reorderWideFormByHeader_(sheet, COLUMN_OR_FIELD_ORDER.sampleMetadata, "sampleMetadata"));
-    } else {
-      results.push('Skipped "sampleMetadata" (sheet not found).');
-    }
-  }
+  reorderIfNoMerges(
+    spreadsheet.getSheetByName("sampleMetadata"),
+    reorderWideFormByHeader_, COLUMN_OR_FIELD_ORDER.sampleMetadata, "sampleMetadata"
+  );
 
   // experimentRunMetadata: move columns by header row
-  {
-    const sheet = spreadsheet.getSheetByName("experimentRunMetadata");
-    if (sheet) {
-      results.push(reorderWideFormByHeader_(sheet, COLUMN_OR_FIELD_ORDER.experimentRunMetadata, "experimentRunMetadata"));
-    } else {
-      results.push('Skipped "experimentRunMetadata" (sheet not found).');
-    }
-  }
+  reorderIfNoMerges(
+    spreadsheet.getSheetByName("experimentRunMetadata"),
+    reorderWideFormByHeader_, COLUMN_OR_FIELD_ORDER.experimentRunMetadata, "experimentRunMetadata"
+  );
 
   // analysisMetadata*: move term_name rows for all matching sheets
   {
@@ -618,12 +628,131 @@ function reorderMetadataSheets() {
       results.push('Skipped "analysisMetadata*" (no matching sheets found).');
     } else {
       analysisSheets.forEach(s => {
-        results.push(reorderLongFormByTermName_(s, COLUMN_OR_FIELD_ORDER.analysisMetadata, s.getName()));
+        reorderIfNoMerges(s, reorderLongFormByTermName_, COLUMN_OR_FIELD_ORDER.analysisMetadata, s.getName());
       });
     }
   }
 
+  // Safety net: refresh row-3 notes in wide metadata sheets from checklist definitions.
+  results.push(refreshRow3NotesFromChecklist_(spreadsheet));
+
   ui.alert(results.filter(Boolean).join("\n\n"));
+}
+
+function refreshRow3NotesFromChecklist_(spreadsheet) {
+  const build = buildChecklistDefinitionMap_(spreadsheet);
+  const definitionByTerm = build.definitionByTerm;
+  const definitionCount = Object.keys(definitionByTerm).length;
+
+  if (definitionCount === 0) {
+    return "No checklist definitions were found, so row-3 notes were not updated.";
+  }
+
+  const targetSheetNames = ["sampleMetadata", "experimentRunMetadata"];
+  const results = [
+    `Loaded ${definitionCount} checklist definition(s) from ${build.sourceSheetCount} sheet(s).`,
+  ];
+
+  targetSheetNames.forEach(sheetName => {
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    if (!sheet) {
+      results.push(`Skipped "${sheetName}" (sheet not found).`);
+      return;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 1) {
+      results.push(`Skipped "${sheetName}" (empty sheet).`);
+      return;
+    }
+
+    const headerValues = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
+    const existingNotes = sheet.getRange(3, 1, 1, lastCol).getNotes()[0];
+    const updatedNotes = existingNotes.slice();
+
+    let updatedCount = 0;
+    let matchedHeaders = 0;
+    let missingDefinitions = 0;
+
+    for (let i = 0; i < headerValues.length; i++) {
+      const header = (headerValues[i] || "").toString().trim();
+      if (!header) continue;
+
+      const definition = definitionByTerm[header];
+      if (definition == null || definition === "") {
+        missingDefinitions += 1;
+        continue; // Preserve any existing note if no checklist definition was found.
+      }
+
+      matchedHeaders += 1;
+      if (updatedNotes[i] !== definition) {
+        updatedNotes[i] = definition;
+        updatedCount += 1;
+      }
+    }
+
+    if (updatedCount > 0) {
+      sheet.getRange(3, 1, 1, lastCol).setNotes([updatedNotes]);
+    }
+
+    results.push(
+      `"${sheetName}": updated ${updatedCount} note(s); matched ${matchedHeaders} header(s); no checklist definition for ${missingDefinitions} header(s).`
+    );
+  });
+
+  return results.join("\n");
+}
+
+function buildChecklistDefinitionMap_(spreadsheet) {
+  const definitionByTerm = {};
+  let sourceSheetCount = 0;
+  const candidateDefinitionHeaders = [
+    "definition",
+    "description",
+    "term_definition",
+    "term_description",
+    "guidance",
+    "help_text",
+  ];
+
+  spreadsheet.getSheets().forEach(sheet => {
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 2 || lastCol < 2) return;
+
+    const headerValues = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
+    const termNameCol = headerValues.indexOf("term_name") + 1;
+    if (termNameCol < 1) return;
+
+    let definitionCol = 0;
+    for (let i = 0; i < candidateDefinitionHeaders.length; i++) {
+      const idx = headerValues.indexOf(candidateDefinitionHeaders[i]);
+      if (idx !== -1) {
+        definitionCol = idx + 1;
+        break;
+      }
+    }
+    if (definitionCol < 1) return;
+
+    const numRows = lastRow - 1;
+    const termValues = sheet.getRange(2, termNameCol, numRows, 1).getValues();
+    const defValues = sheet.getRange(2, definitionCol, numRows, 1).getValues();
+    let usedThisSheet = false;
+
+    for (let r = 0; r < numRows; r++) {
+      const term = (termValues[r][0] || "").toString().trim();
+      const definition = (defValues[r][0] || "").toString().trim();
+      if (!term || !definition) continue;
+      if (definitionByTerm[term] == null) {
+        definitionByTerm[term] = definition;
+      }
+      usedThisSheet = true;
+    }
+
+    if (usedThisSheet) sourceSheetCount += 1;
+  });
+
+  return { definitionByTerm, sourceSheetCount };
 }
 
 function isWideMetadataSheetLayout_(sheet) {
@@ -800,7 +929,6 @@ function updateIndexMapAfterMove_(indexMap, srcIndex, destIndex) {
 }
 
 const HIGHLIGHT_COLOR = "#ffff00";
-const MERGED_HIGHLIGHT_STATE_KEY = "fairesheetsMergedHighlightState";
 const DUPLICATE_HIGHLIGHT_STATE_KEY = "fairesheetsDuplicateHighlightState";
 
 function loadHighlightState_(key) {
@@ -837,62 +965,6 @@ function rememberAndHighlightCell_(sheet, row, col, stateForSheet) {
     stateForSheet[a1] = cell.getBackground();
   }
   cell.setBackground(HIGHLIGHT_COLOR);
-}
-
-/**
- * Checks for merged cells across all sheets in the active spreadsheet
- * and colors them yellow if they exist.
- */
-function highlightMergedCells() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const ui = SpreadsheetApp.getUi();
-  const sheets = spreadsheet.getSheets();
-  const previousState = loadHighlightState_(MERGED_HIGHLIGHT_STATE_KEY);
-
-  // Undo only the highlights applied by the previous merged-cells run.
-  restoreHighlightState_(spreadsheet, previousState);
-
-  let totalMergedRanges = 0;
-  const sheetsWithMerges = [];
-  const newState = {};
-
-  sheets.forEach(sheet => {
-    const fullRange = sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns());
-    const mergedRanges = fullRange.getMergedRanges();
-    const stateForSheet = {};
-
-    if (mergedRanges.length > 0) {
-      mergedRanges.forEach(range => {
-        const startRow = range.getRow();
-        const startCol = range.getColumn();
-        const numRows = range.getNumRows();
-        const numCols = range.getNumColumns();
-
-        for (let r = 0; r < numRows; r++) {
-          for (let c = 0; c < numCols; c++) {
-            rememberAndHighlightCell_(sheet, startRow + r, startCol + c, stateForSheet);
-          }
-        }
-      });
-      totalMergedRanges += mergedRanges.length;
-      sheetsWithMerges.push(`${sheet.getName()} (${mergedRanges.length})`);
-      newState[sheet.getName()] = stateForSheet;
-    }
-  });
-
-  saveHighlightState_(MERGED_HIGHLIGHT_STATE_KEY, newState);
-
-  if (totalMergedRanges === 0) {
-    ui.alert("No merged cells found in this spreadsheet.\n\nAfter making edits, run this tool again to refresh highlights.");
-    return;
-  }
-
-  const details = sheetsWithMerges.join("\n");
-  ui.alert(
-    "Merged Cells Check Complete",
-    `Found and highlighted ${totalMergedRanges} merged range(s) across ${sheetsWithMerges.length} sheet(s).\n\n${details}\n\nAfter making edits, run this tool again to refresh highlights.`,
-    ui.ButtonSet.OK
-  );
 }
 
 /**
