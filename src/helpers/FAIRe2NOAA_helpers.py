@@ -12,6 +12,66 @@ import webbrowser
 
 from src.helpers.api_retry import retry_on_429, batch_update_with_retry
 
+
+def build_vocab_map_from_noaa_checklist(noaa_checklist_path):
+    """
+    Build a term_name -> dropdown options map from the NOAA checklist.
+
+    Uses controlled_vocabulary_options for rows where term_type is
+    'controlled vocabulary'.
+    """
+    checklist = pd.read_excel(noaa_checklist_path, sheet_name='checklist')
+    vocab_map = {}
+
+    for _, row in checklist.iterrows():
+        if row.get('term_type') != 'controlled vocabulary':
+            continue
+
+        term_name = row.get('term_name')
+        cv_options = row.get('controlled_vocabulary_options')
+        if pd.isna(term_name) or pd.isna(cv_options):
+            continue
+
+        term_name = str(term_name).strip()
+        cv_str = str(cv_options).strip()
+        if not term_name or not cv_str or cv_str == 'nan':
+            continue
+
+        values = [v.strip() for v in cv_str.split('|') if v.strip()]
+        if values:
+            vocab_map[term_name] = values
+
+    return vocab_map
+
+
+def build_vocab_df_from_noaa_checklist(noaa_checklist_path):
+    """
+    Build a Drop-down values-style DataFrame from the NOAA checklist.
+
+    Matches the column layout expected by create_dropdown_sheet and
+    the metadata sheet helpers (term_name, n_options, vocab1, vocab2, ...).
+    """
+    vocab_map = build_vocab_map_from_noaa_checklist(noaa_checklist_path)
+    if not vocab_map:
+        return pd.DataFrame(columns=['term_name', 'n_options'])
+
+    max_opts = max(len(values) for values in vocab_map.values())
+    rows = []
+    for term_name, values in vocab_map.items():
+        row = {'term_name': term_name, 'n_options': len(values)}
+        for i, value in enumerate(values, start=1):
+            row[f'vocab{i}'] = value
+        rows.append(row)
+
+    vocab_df = pd.DataFrame(rows)
+    for i in range(1, max_opts + 1):
+        col = f'vocab{i}'
+        if col not in vocab_df.columns:
+            vocab_df[col] = ''
+
+    return vocab_df
+
+
 def get_bioinformatics_fields(noaa_checklist_path):
     """
     Get list of bioinformatics fields from the NOAA checklist.
@@ -1761,20 +1821,7 @@ def update_noaa_vocab_dropdowns(spreadsheet, noaa_checklist_path):
         noaa_checklist_path (str): Path to the NOAA checklist Excel file
     """
     try:
-        import pandas as pd
-        
-        # Read NOAA checklist to get updated vocabulary
-        noaa_checklist = pd.read_excel(noaa_checklist_path, sheet_name='checklist')
-        
-        # Build a mapping of term_name to controlled_vocabulary_options
-        vocab_map = {}
-        for _, row in noaa_checklist.iterrows():
-            term_name = row.get('term_name')
-            cv_options = row.get('controlled_vocabulary_options')
-            if pd.notna(term_name) and pd.notna(cv_options):
-                cv_str = str(cv_options).strip()
-                if cv_str and cv_str != 'nan':
-                    vocab_map[term_name] = [v.strip() for v in cv_str.split('|') if v.strip()]
+        vocab_map = build_vocab_map_from_noaa_checklist(noaa_checklist_path)
         
         if not vocab_map:
             return
@@ -1794,6 +1841,10 @@ def update_noaa_vocab_dropdowns(spreadsheet, noaa_checklist_path):
                 _update_sheet_dropdowns(worksheet, vocab_map)
             except gspread.exceptions.WorksheetNotFound:
                 continue
+
+        for worksheet in spreadsheet.worksheets():
+            if worksheet.title.startswith('analysisMetadata'):
+                _update_sheet_dropdowns(worksheet, vocab_map)
             
     except Exception as e:
         raise Exception(f"Error updating NOAA vocabulary dropdowns: {e}")
@@ -1881,7 +1932,7 @@ def _update_sheet_dropdowns(worksheet, vocab_map):
                 row = data[row_idx]
                 if term_name_col_idx >= len(row):
                     continue
-                term_name = row[term_name_col_idx]
+                term_name = (row[term_name_col_idx] or "").strip()
                 if term_name not in vocab_map:
                     continue
 
@@ -1943,6 +1994,7 @@ def _update_sheet_dropdowns(worksheet, vocab_map):
 
         validation_requests = []
         for col_idx, term_name in enumerate(term_row):
+            term_name = (term_name or "").strip()
             if term_name not in vocab_map:
                 continue
             cv_values = vocab_map.get(term_name, [])

@@ -42,6 +42,7 @@ from src.helpers.sample_metadata_sheet import create_sample_metadata_sheet
 from src.helpers.experiment_metadata_sheet import create_experiment_metadata_sheet
 from src.helpers.taxa_sheets import create_taxa_sheets
 from src.helpers.targeted_sheets import create_targeted_sheets
+from src.helpers.FAIRe2NOAA_helpers import build_vocab_df_from_noaa_checklist
 
 def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
                 sample_type=None, 
@@ -52,7 +53,8 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
                 sampleMetadata_user=None,
                 experimentRunMetadata_user=None,
                 input_dir=None,
-                client=None):
+                client=None,
+                use_noaa_vocab=False):
     """
     Generate FAIR eDNA data templates in Google Sheets
     
@@ -95,6 +97,10 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         
     client : gspread.Client, required
         Pre-authenticated gspread client from OAuth authentication.
+    
+    use_noaa_vocab : bool, optional
+        If True, build dropdown values from the NOAA checklist instead of the
+        generic FAIR FULLtemplate. Use when generating sheets for FAIRe-NOAA.
     
     Returns:
     --------
@@ -275,8 +281,11 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     else:
         print("README sheet created (2/{})".format(len(operations)))
     
-    # Read vocabulary data from the full template
-    vocab_df = pd.read_excel(full_temp_file_path, sheet_name='Drop-down values')
+    # Read vocabulary data for dropdown validation
+    if use_noaa_vocab:
+        vocab_df = build_vocab_df_from_noaa_checklist(input_file_path)
+    else:
+        vocab_df = pd.read_excel(full_temp_file_path, sheet_name='Drop-down values')
     
     # Create Drop-down values sheet
     if TQDM_AVAILABLE:

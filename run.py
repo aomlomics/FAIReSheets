@@ -105,6 +105,7 @@ def main():
                 experimentRunMetadata_user=experimentRunMetadata_user,
                 input_dir=input_dir,
                 client=client,
+                use_noaa_vocab=run_noaa_formatting,
             )
         
         if run_noaa_formatting:

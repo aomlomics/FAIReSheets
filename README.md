@@ -27,9 +27,7 @@ Need help running FAIReSheets?
 
 FAIReSheets is now Google verified, so you no longer need to email for access, but now I don't know who is using it!
 
-If you're open to it, please reach out to me via email and include your institution or lab name (and logo). With your permission, I'd like to include your lab's logo here to document this repository's use.
-
-Email: ``bayden.willms@noaa.gov``
+This is ``completely optional``, but we would appreciate if you reached out to us via email (bayden.willms@noaa.gov) and briefly tell us about your research and lab. This is used internally.
 
 ---
 ### Table of Contents
