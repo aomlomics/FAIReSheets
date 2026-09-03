@@ -155,6 +155,8 @@ function onOpen() {
       .addItem('Download all sheets as TSV', 'exportSheetsAsTsv')
       .addItem('Standardize font across all sheets', 'standardizeFontAcrossAllSheets')
       .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
+      .addItem('Check/Refresh merged cells', 'highlightMergedCells')
+      .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
       .addToUi();
 
   // Auto-run font standardization once (no user action required).
@@ -795,6 +797,196 @@ function updateIndexMapAfterMove_(indexMap, srcIndex, destIndex) {
     }
     indexMap[k] = idx;
   });
+}
+
+const HIGHLIGHT_COLOR = "#ffff00";
+const MERGED_HIGHLIGHT_STATE_KEY = "fairesheetsMergedHighlightState";
+const DUPLICATE_HIGHLIGHT_STATE_KEY = "fairesheetsDuplicateHighlightState";
+
+function loadHighlightState_(key) {
+  const raw = PropertiesService.getDocumentProperties().getProperty(key);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveHighlightState_(key, state) {
+  PropertiesService.getDocumentProperties().setProperty(key, JSON.stringify(state || {}));
+}
+
+function restoreHighlightState_(spreadsheet, state) {
+  Object.keys(state).forEach(sheetName => {
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    const cellMap = state[sheetName] || {};
+    Object.keys(cellMap).forEach(a1 => {
+      sheet.getRange(a1).setBackground(cellMap[a1]);
+    });
+  });
+}
+
+function rememberAndHighlightCell_(sheet, row, col, stateForSheet) {
+  const cell = sheet.getRange(row, col);
+  const a1 = cell.getA1Notation();
+  if (!(a1 in stateForSheet)) {
+    stateForSheet[a1] = cell.getBackground();
+  }
+  cell.setBackground(HIGHLIGHT_COLOR);
+}
+
+/**
+ * Checks for merged cells across all sheets in the active spreadsheet
+ * and colors them yellow if they exist.
+ */
+function highlightMergedCells() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const sheets = spreadsheet.getSheets();
+  const previousState = loadHighlightState_(MERGED_HIGHLIGHT_STATE_KEY);
+
+  // Undo only the highlights applied by the previous merged-cells run.
+  restoreHighlightState_(spreadsheet, previousState);
+
+  let totalMergedRanges = 0;
+  const sheetsWithMerges = [];
+  const newState = {};
+
+  sheets.forEach(sheet => {
+    const fullRange = sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns());
+    const mergedRanges = fullRange.getMergedRanges();
+    const stateForSheet = {};
+
+    if (mergedRanges.length > 0) {
+      mergedRanges.forEach(range => {
+        const startRow = range.getRow();
+        const startCol = range.getColumn();
+        const numRows = range.getNumRows();
+        const numCols = range.getNumColumns();
+
+        for (let r = 0; r < numRows; r++) {
+          for (let c = 0; c < numCols; c++) {
+            rememberAndHighlightCell_(sheet, startRow + r, startCol + c, stateForSheet);
+          }
+        }
+      });
+      totalMergedRanges += mergedRanges.length;
+      sheetsWithMerges.push(`${sheet.getName()} (${mergedRanges.length})`);
+      newState[sheet.getName()] = stateForSheet;
+    }
+  });
+
+  saveHighlightState_(MERGED_HIGHLIGHT_STATE_KEY, newState);
+
+  if (totalMergedRanges === 0) {
+    ui.alert("No merged cells found in this spreadsheet.\n\nAfter making edits, run this tool again to refresh highlights.");
+    return;
+  }
+
+  const details = sheetsWithMerges.join("\n");
+  ui.alert(
+    "Merged Cells Check Complete",
+    `Found and highlighted ${totalMergedRanges} merged range(s) across ${sheetsWithMerges.length} sheet(s).\n\n${details}\n\nAfter making edits, run this tool again to refresh highlights.`,
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * Checks for duplicate samp_names in sampleMetadata and lib_ids
+ * in experimentRunMetadata and colors duplicates yellow.
+ *
+ * Note: this is case-sensitive ("ABC" and "abc" are treated as different values).
+ * Existing cell colors are preserved by not clearing backgrounds before the check.
+ */
+function highlightDuplicates() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  let totalDuplicates = 0;
+  const missingElements = [];
+  const previousState = loadHighlightState_(DUPLICATE_HIGHLIGHT_STATE_KEY);
+  const newState = {};
+
+  // Undo only the highlights applied by the previous duplicate-check run.
+  restoreHighlightState_(ss, previousState);
+
+  // Helper function to process a specific sheet and column.
+  function findAndHighlight(sheetName, columnName) {
+    const sheet = ss.getSheetByName(sheetName);
+
+    // Check if sheet exists.
+    if (!sheet) {
+      missingElements.push(`Sheet '${sheetName}' was not found.`);
+      return;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    const lastRow = sheet.getLastRow();
+
+    // Skip if the sheet doesn't have data below Row 3.
+    if (lastRow < 4 || lastCol < 1) return;
+
+    // Get the headers from ROW 3.
+    const headers = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
+    const colIndex = headers.indexOf(columnName);
+
+    // Check if column exists in Row 3.
+    if (colIndex === -1) {
+      missingElements.push(`Column header '${columnName}' was not found in Row 3 of '${sheetName}'.`);
+      return;
+    }
+
+    const colNum = colIndex + 1;
+    const numDataRows = lastRow - 3; // Total rows containing data starting from Row 4.
+    const stateForSheet = {};
+
+    // Fetch the data starting from Row 4.
+    const data = sheet.getRange(4, colNum, numDataRows, 1).getValues();
+    const counts = {};
+
+    // Count occurrences of each value (ignoring blank cells), case-sensitive.
+    data.forEach(row => {
+      const val = String(row[0]).trim();
+      if (val !== "") {
+        counts[val] = (counts[val] || 0) + 1;
+      }
+    });
+
+    // Find which specific cells are duplicates.
+    for (let i = 0; i < data.length; i++) {
+      const val = String(data[i][0]).trim();
+      if (val !== "" && counts[val] > 1) {
+        // i = 0 maps to Row 4 in the sheet grid.
+        rememberAndHighlightCell_(sheet, i + 4, colNum, stateForSheet);
+        totalDuplicates++;
+      }
+    }
+    if (Object.keys(stateForSheet).length > 0) {
+      newState[sheetName] = stateForSheet;
+    }
+  }
+
+  // Run the checks.
+  findAndHighlight('sampleMetadata', 'samp_name');
+  findAndHighlight('experimentRunMetadata', 'lib_id');
+  saveHighlightState_(DUPLICATE_HIGHLIGHT_STATE_KEY, newState);
+
+  // Create the pop-up summary.
+  let msg = "";
+  if (missingElements.length > 0) {
+    msg += "WARNINGS:\n" + missingElements.join("\n") + "\n\n";
+  }
+
+  if (totalDuplicates === 0) {
+    msg += "No duplicates found in either column. Everything looks good!\n\nAfter making edits, run this tool again to refresh highlights.";
+  } else {
+    msg += `Found and highlighted a total of ${totalDuplicates} duplicate cell(s).\n\nAfter making fixes, run this tool again to refresh highlights.`;
+  }
+
+  ui.alert("Duplicate Check Complete", msg, ui.ButtonSet.OK);
 }
 ```
 
