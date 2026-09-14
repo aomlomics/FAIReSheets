@@ -57,7 +57,7 @@ Before using FAIReSheets, create a blank Google Sheet. FAIReSheets is verified b
      conda activate FAIReSheets
      ```
 
-   **Option B — pip (Python 3.9+):**
+   **Option B — pip (Python 3.11+):**
    ```bash
    pip install -r requirements.txt
    ```
