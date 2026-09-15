@@ -5,7 +5,7 @@
 </div>
 
 <blockquote>
-  <p>⚠️ <strong>Google verification update (August 5, 2026):</strong> FAIReSheets is now a Google verified OAuth app. If you have recently run into errors, please <strong>pull the latest version</strong> (<code>git pull</code>). You no longer need <code>GIST_URL</code> in your <code>.env</code> file — just your <code>SPREADSHEET_ID</code>.</p>
+  <p><strong>Google verification update (August 5, 2026):</strong> FAIReSheets is now a Google verified OAuth app. If you have recently run into errors, please <strong>pull the latest version</strong> (<code>git pull</code>). You no longer need <code>GIST_URL</code> in your <code>.env</code> file — just your <code>SPREADSHEET_ID</code>.</p>
 </blockquote>
 
 FAIReSheets converts the FAIR eDNA ([FAIRe](https://fair-edna.github.io/index.html)) data checklist to customizable Google Sheets templates. FAIReSheets can be run in one of 2 modes:
@@ -199,31 +199,34 @@ function escapeHtml_(s) {
 function reportToHtml_(text) {
   const lines = String(text || "").split("\n");
   let html = "";
-  let open = false;
-  function closeList() {
-    if (!open) return;
-    html += "</ul>";
-    open = false;
+  let items = [];
+  function flushItems() {
+    if (!items.length) return;
+    if (items.length === 1) html += "<p>" + escapeHtml_(items[0]) + "</p>";
+    else {
+      html += "<ul>";
+      items.forEach(line => {
+        html += "<li>" + escapeHtml_(line) + "</li>";
+      });
+      html += "</ul>";
+    }
+    items = [];
   }
   lines.forEach(raw => {
     const line = String(raw || "").replace(/\s+$/, "");
     if (!line) {
-      closeList();
+      flushItems();
       return;
     }
     const isHead = /:$/.test(line) && line.indexOf(": ") === -1;
     if (isHead) {
-      closeList();
+      flushItems();
       html += "<p><b>" + escapeHtml_(line) + "</b></p>";
       return;
     }
-    if (!open) {
-      html += "<ul>";
-      open = true;
-    }
-    html += "<li>" + escapeHtml_(line) + "</li>";
+    items.push(line);
   });
-  closeList();
+  flushItems();
   return html || "<p>Done.</p>";
 }
 
@@ -975,24 +978,6 @@ function dropdownRuleFromOptions_(options) {
     .build();
 }
 
-function dropdownApiRule_(options) {
-  return {
-    condition: {
-      type: "ONE_OF_LIST",
-      values: options.map(function(v) { return { userEnteredValue: String(v) }; }),
-    },
-    showCustomUi: true,
-    strict: true,
-  };
-}
-
-function batchUpdateChunked_(spreadsheet, requests) {
-  if (!requests.length) return;
-  for (var i = 0; i < requests.length; i += 100) {
-    spreadsheet.batchUpdate(requests.slice(i, i + 100));
-  }
-}
-
 function sameVocabRule_(rule, options) {
   if (!rule || rule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return false;
   if (rule.getAllowInvalid()) return false;
@@ -1032,11 +1017,8 @@ function updateWideSheetDropdowns_(sheet, vocabByTerm) {
   const endRow = wideDropdownEndRow_(sheet);
   if (endRow < startRow) return `Skipped "${sheet.getName()}" (no data rows).`;
 
+  const numRows = endRow - startRow + 1;
   const headers = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
-  const sheetId = sheet.getSheetId();
-  const startRowIndex = startRow - 1;
-  const endRowIndex = endRow;
-  const requests = [];
   let updated = 0;
   let skipped = 0;
   let noVocab = 0;
@@ -1048,25 +1030,10 @@ function updateWideSheetDropdowns_(sheet, vocabByTerm) {
       skipped += 1;
       return;
     }
-    const grid = {
-      sheetId: sheetId,
-      startRowIndex: startRowIndex,
-      endRowIndex: endRowIndex,
-      startColumnIndex: i,
-      endColumnIndex: i + 1,
-    };
-    const sampleRule = sheet.getRange(startRow, i + 1).getDataValidation();
-    if (info.isVocab && info.options.length) {
-      if (sameVocabRule_(sampleRule, info.options)) return;
-      requests.push({ setDataValidation: { range: grid, rule: dropdownApiRule_(info.options) } });
-      updated += 1;
-      return;
-    }
-    if (!sampleRule) return;
-    requests.push({ setDataValidation: { range: grid, rule: null } });
-    noVocab += 1;
+    const result = applyDropdownOrClear_(sheet.getRange(startRow, i + 1, numRows, 1), info);
+    if (result === "updated") updated += 1;
+    else if (result === "no vocab") noVocab += 1;
   });
-  batchUpdateChunked_(sheet.getParent(), requests);
   return `"${sheet.getName()}": updated ${updated} dropdown(s); skipped ${skipped} field(s) not in checklist; no vocab for ${noVocab} field(s).`;
 }
 
@@ -1091,10 +1058,6 @@ function updateLongFormDropdowns_(sheet, vocabByTerm) {
   const numCols = lastCol - valueStart + 1;
 
   const terms = sheet.getRange(2, termCol, lastRow - 1, 1).getValues();
-  const sheetId = sheet.getSheetId();
-  const valueStartIndex = valueStart - 1;
-  const valueEndIndex = valueStartIndex + numCols;
-  const requests = [];
   let updated = 0;
   let skipped = 0;
   let noVocab = 0;
@@ -1106,26 +1069,10 @@ function updateLongFormDropdowns_(sheet, vocabByTerm) {
       skipped += 1;
       return;
     }
-    const rowIndex = i + 1;
-    const grid = {
-      sheetId: sheetId,
-      startRowIndex: rowIndex,
-      endRowIndex: rowIndex + 1,
-      startColumnIndex: valueStartIndex,
-      endColumnIndex: valueEndIndex,
-    };
-    const sampleRule = sheet.getRange(i + 2, valueStart).getDataValidation();
-    if (info.isVocab && info.options.length) {
-      if (sameVocabRule_(sampleRule, info.options)) return;
-      requests.push({ setDataValidation: { range: grid, rule: dropdownApiRule_(info.options) } });
-      updated += 1;
-      return;
-    }
-    if (!sampleRule) return;
-    requests.push({ setDataValidation: { range: grid, rule: null } });
-    noVocab += 1;
+    const result = applyDropdownOrClear_(sheet.getRange(i + 2, valueStart, 1, numCols), info);
+    if (result === "updated") updated += 1;
+    else if (result === "no vocab") noVocab += 1;
   });
-  batchUpdateChunked_(sheet.getParent(), requests);
   return `"${sheet.getName()}": updated ${updated} dropdown(s); skipped ${skipped} field(s) not in checklist; no vocab for ${noVocab} field(s).`;
 }
 
@@ -1281,7 +1228,7 @@ function updateRequirementColorsFromChecklist() {
 function applyChecklist() {
   runChecklistMenu_(
     "Apply all checklist updates",
-    "<p>Updates notes, dropdowns, then colors.</p><p>If fields are missing, you will see the list before any are added. Cell values are not changed.</p>",
+    "<p>Continue runs notes, dropdowns, then colors first. Cell values are not changed.</p><p>If fields are missing, you get a second prompt with the list. Choose Append fields or Skip. Your Google Sheets are not edited until a confirmation.</p>",
     "apply"
   );
 }
@@ -1498,10 +1445,7 @@ function appendWideFields_(sheet, items) {
   const startCol = lastCol + 1;
   const endRow = wideDropdownEndRow_(sheet);
   clearNewRange_(sheet.getRange(1, startCol, endRow, items.length));
-  const sheetId = sheet.getSheetId();
-  const startRowIndex = 3;
-  const endRowIndex = endRow;
-  const dropdownRequests = [];
+  const numRows = Math.max(1, endRow - 3);
   items.forEach((item, i) => {
     const col = startCol + i;
     const reqCell = sheet.getRange(1, col);
@@ -1511,22 +1455,8 @@ function appendWideFields_(sheet, items) {
     const header = sheet.getRange(3, col);
     header.setValue(item.term);
     if (item.note) header.setNote(item.note);
-    if (item.isVocab && item.options.length) {
-      dropdownRequests.push({
-        setDataValidation: {
-          range: {
-            sheetId: sheetId,
-            startRowIndex: startRowIndex,
-            endRowIndex: endRowIndex,
-            startColumnIndex: col - 1,
-            endColumnIndex: col,
-          },
-          rule: dropdownApiRule_(item.options),
-        },
-      });
-    }
+    applyDropdownOrClear_(sheet.getRange(4, col, numRows, 1), item);
   });
-  batchUpdateChunked_(sheet.getParent(), dropdownRequests);
 }
 
 function appendLongFormFields_(sheet, items) {
