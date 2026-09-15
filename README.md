@@ -127,13 +127,13 @@ Follow the instructions below to add a **FAIReSheets Tools** menu to your Google
 
 ### Updating the `checklist` tab on an existing Google Sheet
 
-FAIReSheets generates a copy of the checklist into a `checklist.xlsx` file using this command:
+Put the new checklist `.xlsx` in `input/`, then export it to CSV:
 
 ```bash
 python export_checklist.py FAIRe_NOAA_checklist_v1.0.3.xlsx
 ```
 
-Which writes `input/checklist.csv` locally (same table as the generated `checklist` tab). In your Google Sheet:
+That writes `input/checklist.csv` (same table as the `checklist` tab FAIReSheets generates). In your Google Sheet:
 
 1. Open the `checklist` tab.
 2. **File → Import → Upload** `input/checklist.csv`.
@@ -141,7 +141,7 @@ Which writes `input/checklist.csv` locally (same table as the generated `checkli
 
 This file is used by the Apps Script to update your existing FAIRe templates with new fields, updated descriptions, dropdown values, requirement levels, and more.
 
-Your FAIRe templates are generated with a checklist tab. If a new version of the checklist is published, you can generate a new `checklist.xlsx` and replace the outdated checklist tab in your Google Sheet.
+Your FAIRe templates include a checklist tab. When a new checklist is published, export a fresh `input/checklist.csv` and replace the outdated checklist tab in your Google Sheet.
 
 ### Adding the Google Apps Script
 
