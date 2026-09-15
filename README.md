@@ -119,50 +119,57 @@ When you run FAIReSheets for the first time, the following will happen:
 
 ## Optional (recommended): Google Apps Script
 
-Copy and Paste the following Google Apps Script for some helpful features, like tracking modifications in the README of your Google Sheet, data validation on important fields, and a button to download all sheets as TSV files (needed for [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and edna2obis submission).
+<div align="left">
+  <img src="src/helpers/google_apps_script_logo.png" alt="Google Apps Script" width="96">
+</div>
 
-NOTE: FAIReSheets now standardizes font family + font size across all sheets during template generation, so the font-related Apps Script features are optional.
+Follow the instructions below to add a **FAIReSheets Tools** menu to your Google Sheets page. It covers TSV download (needed for [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and [edna2obis](https://github.com/aomlomics/edna2obis)), duplicate checks, and checklist updates (notes, dropdowns, colors, and new fields).
 
 ### Updating the `checklist` tab on an existing Google Sheet
 
-FAIReSheets copies the current checklist into a `checklist` tab, which is used by the Google Apps Script for helpful data validation and template updater functions. When a new checklist is released, put the `.xlsx` in the `input/` folder, then paste its filename:
+FAIReSheets generates a copy of the checklist into a `checklist.xlsx` file using this command:
 
 ```bash
 python export_checklist.py FAIRe_NOAA_checklist_v1.0.3.xlsx
 ```
 
-That writes `input/checklist.csv` LOCALLY. This is the same table as the `checklist` tab that FAIReSheets generates. Then:
+Which writes `input/checklist.csv` locally (same table as the generated `checklist` tab). In your Google Sheet:
 
-In your existing Google Sheet:
 1. Open the `checklist` tab.
 2. **File → Import → Upload** `input/checklist.csv`.
 3. Choose **Replace current sheet**.
 
+This file is used by the Apps Script to update your existing FAIRe templates with new fields, updated descriptions, dropdown values, requirement levels, and more.
+
+Your FAIRe templates are generated with a checklist tab. If a new version of the checklist is published, you can generate a new `checklist.xlsx` and replace the outdated checklist tab in your Google Sheet.
+
 ### Adding the Google Apps Script
 
 1. Open your Google Sheet.
-2. Click on `Extensions` in the menu, then select `Apps Script`.
-3. Delete any code in the script editor and copy-paste the following code.
-   IMPORTANT: Make sure you copy the FULL script starting from `const REFERENCE_SHEETS` (the menu will NOT appear if you only paste `exportSheetsAsTsv()`).
-   After saving, reload/refresh the Google Sheet tab to trigger `onOpen()` and show a new `FAIReSheets Tools` menu in the Google Sheets UI.
+2. **Extensions → Apps Script**.
+3. Delete any existing code. Copy the **full** script below, starting at `const REFERENCE_SHEETS`.
+4. Save (**File → Save**, or the disk icon).
+5. **CLOSE the Google Sheet and reopen it.** You will see a FAIReSheets Tools tab appear on your browser:
 
-Once the `FAIReSheets Tools` menu appears, you can:
-- Download sheets as TSVs (for Ocean DNA Explorer / edna2obis submission)
+<div align="left">
+  <img src="src/helpers/fairesheets_tools_menu_screenshot.png" alt="FAIReSheets Tools menu in Google Sheets" width="640">
+</div>
+
+Google may ask you to authorize the script the first time you run a tool.
+
+**FAIReSheets Tools**
+
+- Download sheets as TSVs (for Ocean DNA Explorer / edna2obis)
 - Standardize font across sheets
 - Reorder terms based on Apps Script lists
 - Check / Recheck for duplicate samp_names and lib_ids
 - Update term_name descriptions from the `checklist` tab
 - Update dropdown values from the `checklist` tab
 - Update requirement and section colors from the `checklist` tab
-- Update sheets with new fields from checklist (append missing fields at the end only)
+- Update sheets with new fields from checklist (append at the end only)
 - Apply all checklist updates (notes, dropdowns, colors/sections, then append)
 
-The reordering tool:
-- Can be run **before or after** you’ve filled the sheet with data (it moves entire rows/columns, so your entered data moves with the fields)
-- Uses clean ordered lists inside the Apps Script (you can edit them if you want)
-- Will **not** break if you include terms/headers that aren’t present in your sheet (it will skip them)
-- Reports what it moved and what was missing (ignored)
-   The first time you run it, Google may ask you to authorize permissions.
+Reorder moves existing rows/columns in place, before or after you fill in data. Edit the lists in the script if you want. Missing terms are skipped.
 
 ```javascript
 const REFERENCE_SHEETS = ["README", "Drop-down values", "checklist"];
@@ -1731,9 +1738,6 @@ function highlightDuplicates() {
   showInfoPopup_("Check / Recheck duplicates", reportToHtml_(msg));
 }
 ```
-
-4. Click the disk icon or `File > Save` to save the script.
-5. Close the Apps Script editor.
 
 ### Preparing Your Data for the Ocean DNA Explorer (ODE)
 
