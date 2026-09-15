@@ -521,7 +521,13 @@ function reorderMetadataSheets() {
     }
     const merged = sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).getMergedRanges();
     if (merged.length) {
-      merged.forEach(range => range.setBackground("yellow"));
+      merged.forEach(range => {
+        range.setBackground("yellow");
+        appendHighlightNote_(
+          range,
+          "Merged cells block reordering. Unmerge this range, then run Reorder again."
+        );
+      });
       results.push(`⚠️ Skipped "${label}" — ${merged.length} merged range(s) found and highlighted in yellow. Please unmerge them and try again.`);
       return;
     }
@@ -841,6 +847,20 @@ function reorderLongFormByTermName_(sheet, desiredTermOrder, labelForMessages) {
 const HIGHLIGHT_COLOR = "#ffff00";
 const DUPLICATE_HIGHLIGHT_STATE_KEY = "fairesheetsDuplicateHighlightState";
 
+function appendHighlightNote_(range, message) {
+  const line = "HIGHLIGHT: " + message;
+  const note = range.getNote();
+  if (note && note.indexOf(line) !== -1) return;
+  range.setNote(note ? note + "\n" + line : line);
+}
+
+function stripHighlightNotes_(range) {
+  const note = range.getNote();
+  if (!note) return;
+  const kept = note.split("\n").filter(line => !line.startsWith("HIGHLIGHT:")).join("\n");
+  range.setNote(kept);
+}
+
 function loadHighlightState_(key) {
   const raw = PropertiesService.getDocumentProperties().getProperty(key);
   if (!raw) return {};
@@ -861,7 +881,11 @@ function restoreHighlightState_(spreadsheet, state) {
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) return;
     const cellMap = state[sheetName] || {};
-    Object.keys(cellMap).forEach(a1 => sheet.getRange(a1).setBackground(cellMap[a1]));
+    Object.keys(cellMap).forEach(a1 => {
+      const cell = sheet.getRange(a1);
+      cell.setBackground(cellMap[a1]);
+      stripHighlightNotes_(cell);
+    });
   });
 }
 
@@ -905,6 +929,7 @@ function highlightDuplicates() {
       const a1 = cell.getA1Notation();
       if (!(a1 in stateForSheet)) stateForSheet[a1] = cell.getBackground();
       cell.setBackground(HIGHLIGHT_COLOR);
+      appendHighlightNote_(cell, `Duplicate ${columnName} in this column. Each ${columnName} must be unique.`);
       totalDuplicates += 1;
     });
     if (Object.keys(stateForSheet).length) newState[sheetName] = stateForSheet;
