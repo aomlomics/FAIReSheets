@@ -975,6 +975,24 @@ function dropdownRuleFromOptions_(options) {
     .build();
 }
 
+function dropdownApiRule_(options) {
+  return {
+    condition: {
+      type: "ONE_OF_LIST",
+      values: options.map(function(v) { return { userEnteredValue: String(v) }; }),
+    },
+    showCustomUi: true,
+    strict: true,
+  };
+}
+
+function batchUpdateChunked_(spreadsheet, requests) {
+  if (!requests.length) return;
+  for (var i = 0; i < requests.length; i += 100) {
+    spreadsheet.batchUpdate(requests.slice(i, i + 100));
+  }
+}
+
 function sameVocabRule_(rule, options) {
   if (!rule || rule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return false;
   if (rule.getAllowInvalid()) return false;
@@ -988,38 +1006,20 @@ function sameVocabRule_(rule, options) {
 }
 
 function applyDropdownOrClear_(range, info) {
-  const rules = range.getDataValidations();
+  const rule = range.getCell(1, 1).getDataValidation();
   if (info.isVocab && info.options.length) {
-    let already = true;
-    for (let r = 0; r < rules.length && already; r++) {
-      for (let c = 0; c < rules[r].length; c++) {
-        if (!sameVocabRule_(rules[r][c], info.options)) {
-          already = false;
-          break;
-        }
-      }
-    }
-    if (already) return null;
+    if (sameVocabRule_(rule, info.options)) return null;
     range.setDataValidation(dropdownRuleFromOptions_(info.options));
     return "updated";
   }
-  let anyRule = false;
-  for (let r = 0; r < rules.length && !anyRule; r++) {
-    for (let c = 0; c < rules[r].length; c++) {
-      if (rules[r][c]) {
-        anyRule = true;
-        break;
-      }
-    }
-  }
-  if (!anyRule) return null;
+  if (!rule) return null;
   range.clearDataValidations();
   return "no vocab";
 }
 
 function wideDropdownEndRow_(sheet) {
-  const dataStart = 4;
-  const minEnd = dataStart + 9;
+  const startRow = 4;
+  const minEnd = startRow + 9;
   return Math.max(sheet.getLastRow(), minEnd);
 }
 
@@ -1030,10 +1030,13 @@ function updateWideSheetDropdowns_(sheet, vocabByTerm) {
   const headerRow = 3;
   const startRow = headerRow + 1;
   const endRow = wideDropdownEndRow_(sheet);
-  const numRows = endRow - startRow + 1;
-  if (numRows < 1) return `Skipped "${sheet.getName()}" (no data rows).`;
+  if (endRow < startRow) return `Skipped "${sheet.getName()}" (no data rows).`;
 
   const headers = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+  const sheetId = sheet.getSheetId();
+  const startRowIndex = startRow - 1;
+  const endRowIndex = endRow;
+  const requests = [];
   let updated = 0;
   let skipped = 0;
   let noVocab = 0;
@@ -1045,10 +1048,25 @@ function updateWideSheetDropdowns_(sheet, vocabByTerm) {
       skipped += 1;
       return;
     }
-    const result = applyDropdownOrClear_(sheet.getRange(startRow, i + 1, numRows, 1), info);
-    if (result === "updated") updated += 1;
-    else if (result === "no vocab") noVocab += 1;
+    const grid = {
+      sheetId: sheetId,
+      startRowIndex: startRowIndex,
+      endRowIndex: endRowIndex,
+      startColumnIndex: i,
+      endColumnIndex: i + 1,
+    };
+    const sampleRule = sheet.getRange(startRow, i + 1).getDataValidation();
+    if (info.isVocab && info.options.length) {
+      if (sameVocabRule_(sampleRule, info.options)) return;
+      requests.push({ setDataValidation: { range: grid, rule: dropdownApiRule_(info.options) } });
+      updated += 1;
+      return;
+    }
+    if (!sampleRule) return;
+    requests.push({ setDataValidation: { range: grid, rule: null } });
+    noVocab += 1;
   });
+  batchUpdateChunked_(sheet.getParent(), requests);
   return `"${sheet.getName()}": updated ${updated} dropdown(s); skipped ${skipped} field(s) not in checklist; no vocab for ${noVocab} field(s).`;
 }
 
@@ -1073,6 +1091,10 @@ function updateLongFormDropdowns_(sheet, vocabByTerm) {
   const numCols = lastCol - valueStart + 1;
 
   const terms = sheet.getRange(2, termCol, lastRow - 1, 1).getValues();
+  const sheetId = sheet.getSheetId();
+  const valueStartIndex = valueStart - 1;
+  const valueEndIndex = valueStartIndex + numCols;
+  const requests = [];
   let updated = 0;
   let skipped = 0;
   let noVocab = 0;
@@ -1084,10 +1106,26 @@ function updateLongFormDropdowns_(sheet, vocabByTerm) {
       skipped += 1;
       return;
     }
-    const result = applyDropdownOrClear_(sheet.getRange(i + 2, valueStart, 1, numCols), info);
-    if (result === "updated") updated += 1;
-    else if (result === "no vocab") noVocab += 1;
+    const rowIndex = i + 1;
+    const grid = {
+      sheetId: sheetId,
+      startRowIndex: rowIndex,
+      endRowIndex: rowIndex + 1,
+      startColumnIndex: valueStartIndex,
+      endColumnIndex: valueEndIndex,
+    };
+    const sampleRule = sheet.getRange(i + 2, valueStart).getDataValidation();
+    if (info.isVocab && info.options.length) {
+      if (sameVocabRule_(sampleRule, info.options)) return;
+      requests.push({ setDataValidation: { range: grid, rule: dropdownApiRule_(info.options) } });
+      updated += 1;
+      return;
+    }
+    if (!sampleRule) return;
+    requests.push({ setDataValidation: { range: grid, rule: null } });
+    noVocab += 1;
   });
+  batchUpdateChunked_(sheet.getParent(), requests);
   return `"${sheet.getName()}": updated ${updated} dropdown(s); skipped ${skipped} field(s) not in checklist; no vocab for ${noVocab} field(s).`;
 }
 
@@ -1458,7 +1496,12 @@ function appendWideFields_(sheet, items) {
   if (lastCol < 1) throw new Error("empty sheet");
   sheet.insertColumnsAfter(lastCol, items.length);
   const startCol = lastCol + 1;
-  clearNewRange_(sheet.getRange(1, startCol, sheet.getMaxRows(), items.length));
+  const endRow = wideDropdownEndRow_(sheet);
+  clearNewRange_(sheet.getRange(1, startCol, endRow, items.length));
+  const sheetId = sheet.getSheetId();
+  const startRowIndex = 3;
+  const endRowIndex = endRow;
+  const dropdownRequests = [];
   items.forEach((item, i) => {
     const col = startCol + i;
     const reqCell = sheet.getRange(1, col);
@@ -1468,9 +1511,22 @@ function appendWideFields_(sheet, items) {
     const header = sheet.getRange(3, col);
     header.setValue(item.term);
     if (item.note) header.setNote(item.note);
-    const endRow = wideDropdownEndRow_(sheet);
-    applyDropdownOrClear_(sheet.getRange(4, col, Math.max(1, endRow - 3), 1), item);
+    if (item.isVocab && item.options.length) {
+      dropdownRequests.push({
+        setDataValidation: {
+          range: {
+            sheetId: sheetId,
+            startRowIndex: startRowIndex,
+            endRowIndex: endRowIndex,
+            startColumnIndex: col - 1,
+            endColumnIndex: col,
+          },
+          rule: dropdownApiRule_(item.options),
+        },
+      });
+    }
   });
+  batchUpdateChunked_(sheet.getParent(), dropdownRequests);
 }
 
 function appendLongFormFields_(sheet, items) {
@@ -1485,7 +1541,7 @@ function appendLongFormFields_(sheet, items) {
   const secCol = headers.indexOf("section") + 1;
   const valueStart = longFormValueStartCol_(headers, termCol);
   sheet.insertRowsAfter(lastRow, items.length);
-  clearNewRange_(sheet.getRange(lastRow + 1, 1, items.length, sheet.getMaxColumns()));
+  clearNewRange_(sheet.getRange(lastRow + 1, 1, items.length, lastCol));
   items.forEach((item, i) => {
     const row = lastRow + 1 + i;
     const termCell = sheet.getRange(row, termCol);
