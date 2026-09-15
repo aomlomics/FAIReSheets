@@ -152,6 +152,7 @@ Once the `FAIReSheets Tools` menu appears, you can:
 - Reorder `projectMetadata`, `sampleMetadata`, `experimentRunMetadata`, and all `analysisMetadata*` sheets (by moving rows/columns in-place)
 - Update field descriptions (cell notes) from the `checklist` tab
 - Update dropdowns from the `checklist` tab (controlled vocabulary / Boolean fields)
+- Update requirement colors and section labels from the `checklist` tab
 
 The reordering tool:
 - Can be run **before or after** you’ve filled the sheet with data (it moves entire rows/columns, so your entered data moves with the fields)
@@ -162,6 +163,7 @@ The reordering tool:
 
 ```javascript
 const REFERENCE_SHEETS = ["README", "Drop-down values", "checklist"];
+const REQ_COLORS = { M: "#E26B0A", HR: "#FFCC00", R: "#FFFF99", O: "#CCFF99" };
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -171,6 +173,7 @@ function onOpen() {
       .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
       .addItem('Update field descriptions from checklist', 'updateFieldDescriptionsFromChecklist')
       .addItem('Update dropdowns from checklist', 'updateDropdownsFromChecklist')
+      .addItem('Update requirement colors and sections from checklist', 'updateRequirementColorsFromChecklist')
       .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
       .addToUi();
   standardizeFontAcrossAllSheetsOnce_();
@@ -706,36 +709,43 @@ function forEachMetadataSheet_(spreadsheet, visit) {
   });
 }
 
-function updateFieldDescriptionsFromChecklist_(spreadsheet) {
-  const noteByTerm = checklistNoteByTerm_(spreadsheet);
-  const termCount = Object.keys(noteByTerm).length;
-  if (!termCount) return "No checklist sheet (or no term_name rows) found, so notes were not updated.";
-
-  const results = [`Loaded ${termCount} checklist field(s) from the checklist sheet.`];
+function runPerMetadataSheet_(spreadsheet, byTerm, wideFn, longFn, emptyMsg) {
+  const n = Object.keys(byTerm || {}).length;
+  if (!n) return emptyMsg;
+  const results = [`Loaded ${n} checklist field(s) from the checklist sheet.`];
   forEachMetadataSheet_(spreadsheet, sheet => {
-    if (isWideMetadataSheetLayout_(sheet)) {
-      results.push(updateWideSheetNotes_(sheet, noteByTerm));
-    } else {
-      results.push(updateLongFormNotes_(sheet, noteByTerm));
-    }
+    results.push((isWideMetadataSheetLayout_(sheet) ? wideFn : longFn)(sheet, byTerm));
   });
   return results.join("\n");
 }
 
-function updateFieldDescriptionsFromChecklist() {
+function runChecklistMenu_(title, message, runner) {
   const ui = SpreadsheetApp.getUi();
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  if (!spreadsheet.getSheetByName("checklist")) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss.getSheetByName("checklist")) {
     ui.alert("No checklist sheet found. Import a checklist CSV onto a tab named checklist first.");
     return;
   }
-  const response = ui.alert(
+  if (ui.alert(title, message, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  ui.alert(runner(ss));
+}
+
+function updateFieldDescriptionsFromChecklist_(spreadsheet) {
+  return runPerMetadataSheet_(
+    spreadsheet,
+    checklistNoteByTerm_(spreadsheet),
+    updateWideSheetNotes_,
+    updateLongFormNotes_,
+    "No checklist sheet (or no term_name rows) found, so notes were not updated."
+  );
+}
+
+function updateFieldDescriptionsFromChecklist() {
+  runChecklistMenu_(
     "Update field descriptions",
     "This overwrites field notes (the hover descriptions) using the checklist tab. It does not change any cell values.\n\nContinue?",
-    ui.ButtonSet.YES_NO
+    updateFieldDescriptionsFromChecklist_
   );
-  if (response !== ui.Button.YES) return;
-  ui.alert(updateFieldDescriptionsFromChecklist_(spreadsheet));
 }
 
 function isChecklistDropdownTerm_(termType) {
@@ -780,11 +790,44 @@ function dropdownRuleFromOptions_(options) {
     .build();
 }
 
+function sameVocabRule_(rule, options) {
+  if (!rule || rule.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return false;
+  if (rule.getAllowInvalid()) return false;
+  const vals = rule.getCriteriaValues();
+  const list = vals[0] || [];
+  if (vals[1] === false || list.length !== options.length) return false;
+  for (let i = 0; i < list.length; i++) {
+    if (String(list[i]).trim() !== String(options[i]).trim()) return false;
+  }
+  return true;
+}
+
 function applyDropdownOrClear_(range, info) {
+  const rules = range.getDataValidations();
   if (info.isVocab && info.options.length) {
+    let already = true;
+    for (let r = 0; r < rules.length && already; r++) {
+      for (let c = 0; c < rules[r].length; c++) {
+        if (!sameVocabRule_(rules[r][c], info.options)) {
+          already = false;
+          break;
+        }
+      }
+    }
+    if (already) return null;
     range.setDataValidation(dropdownRuleFromOptions_(info.options));
     return "updated";
   }
+  let anyRule = false;
+  for (let r = 0; r < rules.length && !anyRule; r++) {
+    for (let c = 0; c < rules[r].length; c++) {
+      if (rules[r][c]) {
+        anyRule = true;
+        break;
+      }
+    }
+  }
+  if (!anyRule) return null;
   range.clearDataValidations();
   return "no vocab";
 }
@@ -819,7 +862,7 @@ function updateWideSheetDropdowns_(sheet, vocabByTerm) {
     }
     const result = applyDropdownOrClear_(sheet.getRange(startRow, i + 1, numRows, 1), info);
     if (result === "updated") updated += 1;
-    else noVocab += 1;
+    else if (result === "no vocab") noVocab += 1;
   });
   return `"${sheet.getName()}": updated ${updated} dropdown(s); skipped ${skipped} field(s) not in checklist; no vocab for ${noVocab} field(s).`;
 }
@@ -858,41 +901,158 @@ function updateLongFormDropdowns_(sheet, vocabByTerm) {
     }
     const result = applyDropdownOrClear_(sheet.getRange(i + 2, valueStart, 1, numCols), info);
     if (result === "updated") updated += 1;
-    else noVocab += 1;
+    else if (result === "no vocab") noVocab += 1;
   });
   return `"${sheet.getName()}": updated ${updated} dropdown(s); skipped ${skipped} field(s) not in checklist; no vocab for ${noVocab} field(s).`;
 }
 
 function updateDropdownsFromChecklist_(spreadsheet) {
-  const vocabByTerm = checklistVocabByTerm_(spreadsheet);
-  const termCount = Object.keys(vocabByTerm).length;
-  if (!termCount) return "No checklist sheet (or no term_name rows) found, so dropdowns were not updated.";
-
-  const results = [`Loaded ${termCount} checklist field(s) from the checklist sheet.`];
-  forEachMetadataSheet_(spreadsheet, sheet => {
-    if (isWideMetadataSheetLayout_(sheet)) {
-      results.push(updateWideSheetDropdowns_(sheet, vocabByTerm));
-    } else {
-      results.push(updateLongFormDropdowns_(sheet, vocabByTerm));
-    }
-  });
-  return results.join("\n");
+  return runPerMetadataSheet_(
+    spreadsheet,
+    checklistVocabByTerm_(spreadsheet),
+    updateWideSheetDropdowns_,
+    updateLongFormDropdowns_,
+    "No checklist sheet (or no term_name rows) found, so dropdowns were not updated."
+  );
 }
 
 function updateDropdownsFromChecklist() {
-  const ui = SpreadsheetApp.getUi();
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  if (!spreadsheet.getSheetByName("checklist")) {
-    ui.alert("No checklist sheet found. Import a checklist CSV onto a tab named checklist first.");
-    return;
-  }
-  const response = ui.alert(
+  runChecklistMenu_(
     "Update dropdowns from checklist",
     "This updates dropdown lists from the checklist tab for controlled vocabulary and Boolean fields. Other checklist fields have dropdown validation cleared. User-defined fields not in the checklist are left unchanged. Cell values are not changed.\n\nContinue?",
-    ui.ButtonSet.YES_NO
+    updateDropdownsFromChecklist_
   );
-  if (response !== ui.Button.YES) return;
-  ui.alert(updateDropdownsFromChecklist_(spreadsheet));
+}
+
+function checklistReqByTerm_(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName("checklist");
+  if (!sheet || sheet.getLastRow() < 2) return {};
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(v => (v || "").toString().trim());
+  if (checklistCol_(headers, "term_name") < 0) return {};
+  const byTerm = {};
+  sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues().forEach(row => {
+    const term = checklistCell_(row, headers, "term_name");
+    if (!term || byTerm[term] != null) return;
+    byTerm[term] = {
+      req: checklistCell_(row, headers, "requirement_level_code"),
+      section: checklistCell_(row, headers, "section"),
+    };
+  });
+  return byTerm;
+}
+
+function reqStampChanged_(curReq, curSec, curBg, info) {
+  const color = REQ_COLORS[info.req] || null;
+  const changed =
+    String(curReq || "").trim() !== info.req ||
+    String(curSec || "").trim() !== info.section ||
+    String(curBg || "").toLowerCase() !== String(color || "").toLowerCase();
+  return { color, changed };
+}
+
+function updateWideSheetReq_(sheet, byTerm) {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 2) return `Skipped "${sheet.getName()}" (empty sheet).`;
+  const headers = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
+  const reqRange = sheet.getRange(1, 1, 1, lastCol);
+  const secRange = sheet.getRange(2, 1, 1, lastCol);
+  const reqVals = reqRange.getValues()[0];
+  const secVals = secRange.getValues()[0];
+  const reqBg = reqRange.getBackgrounds()[0];
+  let updated = 0;
+  let skipped = 0;
+  headers.forEach((header, i) => {
+    if (i === 0) return;
+    const term = (header || "").toString().trim();
+    if (!term) return;
+    const info = byTerm[checklistTermKey_(term)];
+    if (!info) {
+      skipped += 1;
+      return;
+    }
+    const stamp = reqStampChanged_(reqVals[i], secVals[i], reqBg[i], info);
+    if (!stamp.changed) return;
+    reqVals[i] = info.req;
+    secVals[i] = info.section;
+    reqBg[i] = stamp.color;
+    updated += 1;
+  });
+  if (updated) {
+    reqRange.setValues([reqVals]);
+    secRange.setValues([secVals]);
+    reqRange.setBackgrounds([reqBg]);
+  }
+  return `"${sheet.getName()}": updated ${updated} field(s); skipped ${skipped} field(s) not in checklist.`;
+}
+
+function updateLongFormReq_(sheet, byTerm) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return `Skipped "${sheet.getName()}" (no data rows).`;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
+  let termCol = headers.indexOf("term_name") + 1;
+  if (termCol < 1) termCol = findCellByValue(sheet, "term_name")?.col || 0;
+  const reqCol = headers.indexOf("requirement_level_code") + 1;
+  const secCol = headers.indexOf("section") + 1;
+  if (termCol < 1) return `Skipped "${sheet.getName()}" (could not find "term_name" column).`;
+  if (!reqCol && !secCol) return `Skipped "${sheet.getName()}" (no requirement_level_code/section columns).`;
+  const n = lastRow - 1;
+  const terms = sheet.getRange(2, termCol, n, 1).getValues();
+  const reqRange = reqCol ? sheet.getRange(2, reqCol, n, 1) : null;
+  const secRange = secCol ? sheet.getRange(2, secCol, n, 1) : null;
+  const reqVals = reqRange && reqRange.getValues();
+  const secVals = secRange && secRange.getValues();
+  const reqBg = reqRange && reqRange.getBackgrounds();
+  let updated = 0;
+  let skipped = 0;
+  terms.forEach((row, i) => {
+    const term = (row[0] || "").toString().trim();
+    if (!term) return;
+    const info = byTerm[checklistTermKey_(term)];
+    if (!info) {
+      skipped += 1;
+      return;
+    }
+    const stamp = reqStampChanged_(
+      reqVals && reqVals[i][0],
+      secVals && secVals[i][0],
+      reqBg && reqBg[i][0],
+      info
+    );
+    if (!stamp.changed) return;
+    if (reqVals) {
+      reqVals[i][0] = info.req;
+      reqBg[i][0] = stamp.color;
+    }
+    if (secVals) secVals[i][0] = info.section;
+    updated += 1;
+  });
+  if (updated) {
+    if (reqRange) {
+      reqRange.setValues(reqVals);
+      reqRange.setBackgrounds(reqBg);
+    }
+    if (secRange) secRange.setValues(secVals);
+  }
+  return `"${sheet.getName()}": updated ${updated} field(s); skipped ${skipped} field(s) not in checklist.`;
+}
+
+function updateRequirementColorsFromChecklist_(spreadsheet) {
+  return runPerMetadataSheet_(
+    spreadsheet,
+    checklistReqByTerm_(spreadsheet),
+    updateWideSheetReq_,
+    updateLongFormReq_,
+    "No checklist sheet (or no term_name rows) found, so requirement colors were not updated."
+  );
+}
+
+function updateRequirementColorsFromChecklist() {
+  runChecklistMenu_(
+    "Update requirement colors and sections",
+    "This updates requirement codes, their colors, and section labels from the checklist tab. It does not change data values or field notes.\n\nContinue?",
+    updateRequirementColorsFromChecklist_
+  );
 }
 
 function isWideMetadataSheetLayout_(sheet) {
