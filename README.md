@@ -159,9 +159,8 @@ The reordering tool:
    The first time you run it, Google may ask you to authorize permissions.
 
 ```javascript
-/**
- * Adds a custom menu to the spreadsheet UI.
- */
+const REFERENCE_SHEETS = ["README", "Drop-down values", "checklist"];
+
 function onOpen() {
   SpreadsheetApp.getUi()
       .createMenu('FAIReSheets Tools')
@@ -170,9 +169,6 @@ function onOpen() {
       .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
       .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
       .addToUi();
-
-  // Auto-run font standardization once (no user action required).
-  // Uses Document Properties so it runs only the first time after the script is added/updated.
   standardizeFontAcrossAllSheetsOnce_();
 }
 
@@ -288,538 +284,389 @@ const COLUMN_OR_FIELD_ORDER = {
   ],
 };
 
-/**
- * Runs standardizeFontAcrossAllSheets() only once per spreadsheet (unless you change the key).
- */
 function standardizeFontAcrossAllSheetsOnce_() {
   const props = PropertiesService.getDocumentProperties();
   const key = "FAIRESHEETS_FONT_STANDARDIZED_V1";
   if (props.getProperty(key) === "true") return;
-
   standardizeFontAcrossAllSheets();
   props.setProperty(key, "true");
 }
 
-/**
- * Standardizes font for every cell in every sheet.
- * This intentionally changes ONLY font family + font size (not background, bold, etc.).
- */
 function standardizeFontAcrossAllSheets() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const sheets = spreadsheet.getSheets();
-
-  // Google Sheets default formatting is typically Arial 10.
-  // If you want a different font, change "Arial" here.
-  const fontFamily = "Arial";
-  const fontSize = 10;
-
-  sheets.forEach(sheet => {
-    const maxRows = sheet.getMaxRows();
-    const maxCols = sheet.getMaxColumns();
-    if (maxRows < 1 || maxCols < 1) return;
-
-    sheet
-      .getRange(1, 1, maxRows, maxCols)
-      .setFontFamily(fontFamily)
-      .setFontSize(fontSize);
+  SpreadsheetApp.getActiveSpreadsheet().getSheets().forEach(sheet => {
+    const rows = sheet.getMaxRows();
+    const cols = sheet.getMaxColumns();
+    if (rows < 1 || cols < 1) return;
+    sheet.getRange(1, 1, rows, cols).setFontFamily("Arial").setFontSize(10);
   });
 }
 
-/**
- * Exports all sheets in the spreadsheet as TSV files to an auto-created Google Drive folder.
- */
 function exportSheetsAsTsv() {
   const ui = SpreadsheetApp.getUi();
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const spreadsheetName = spreadsheet.getName();
-  
-  // Create folder name with timestamp
-  const now = new Date();
-  const timestamp = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd_HHmm");
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd_HHmm");
   const folderName = spreadsheetName + "_TSVs_" + timestamp;
-  
-  // Show confirmation dialog
-  const confirmMessage = 'This will create a new folder in your Google Drive home directory named:\n\n"' + folderName + '"\n\nAll sheets will be exported as TSV files to this folder.\n\nContinue?';
-  const response = ui.alert('Export Sheets as TSV', confirmMessage, ui.ButtonSet.YES_NO);
-  
-  if (response !== ui.Button.YES) {
-    return; // User cancelled
-  }
-  
-  // Create new folder in Drive root (each export gets its own timestamped folder)
-  const rootFolder = DriveApp.getRootFolder();
-  const folder = rootFolder.createFolder(folderName);
-  
-  const sheets = spreadsheet.getSheets();
+
+  const response = ui.alert(
+    "Export Sheets as TSV",
+    'This will create a new folder in your Google Drive home directory named:\n\n"' +
+      folderName +
+      '"\n\nData sheets will be exported as TSV files (README, Drop-down values, and checklist are skipped).\n\nContinue?',
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) return;
+
+  const folder = DriveApp.getRootFolder().createFolder(folderName);
   const filesCreated = [];
   const errors = [];
 
-  for (const sheet of sheets) {
+  spreadsheet.getSheets().forEach(sheet => {
     const sheetName = sheet.getName();
+    if (REFERENCE_SHEETS.includes(sheetName)) return;
     const fileName = `${spreadsheetName}_${sheetName}.tsv`;
-    const data = sheet.getDataRange().getValues();
-    const tsvContent = data.map(row => 
-      row.map(cell => cell.toString().replace(/[\t\n]/g, ' ')).join('\t')
-    ).join('\n');
-
+    const tsvContent = sheet
+      .getDataRange()
+      .getValues()
+      .map(row => row.map(cell => cell.toString().replace(/[\t\n]/g, " ")).join("\t"))
+      .join("\n");
     try {
-      let existingFiles = folder.getFilesByName(fileName);
-      if (existingFiles.hasNext()) {
-        existingFiles.next().setContent(tsvContent);
-      } else {
-        folder.createFile(fileName, tsvContent, MimeType.PLAIN_TEXT);
-      }
+      folder.createFile(fileName, tsvContent, MimeType.PLAIN_TEXT);
       filesCreated.push(fileName);
     } catch (e) {
       errors.push(`Error for sheet "${sheetName}": ${e.message}`);
     }
-  }
+  });
 
-  let message = '';
-  if (filesCreated.length > 0) {
-    message += `Successfully exported ${filesCreated.length} sheets to folder "${folderName}" in your Google Drive.\n\nFiles:\n${filesCreated.join('\n')}`;
+  let message = "";
+  if (filesCreated.length) {
+    message += `Successfully exported ${filesCreated.length} sheets to folder "${folderName}" in your Google Drive.\n\nFiles:\n${filesCreated.join("\n")}`;
   }
-  if (errors.length > 0) {
-    message += `\n\nErrors encountered:\n${errors.join('\n')}`;
-  }
-  
-  ui.alert(message || 'No sheets were exported.');
+  if (errors.length) message += `\n\nErrors encountered:\n${errors.join("\n")}`;
+  ui.alert(message || "No sheets were exported.");
 }
 
-/**
- * Runs automatically when a user edits the spreadsheet.
- * Handles timestamp updates, data validation, and font standardization.
- */
 function onEdit(e) {
-  const range = e.range;
-  const sheet = range.getSheet();
+  const sheet = e.range.getSheet();
   const sheetName = sheet.getName();
+  if (REFERENCE_SHEETS.includes(sheetName)) return;
+
   const spreadsheet = sheet.getParent();
-  
-  // Sheets to ignore for all operations
-  const excludedSheets = ["README", "Drop-down values"];
-  if (excludedSheets.includes(sheetName)) {
-    return;
-  }
-
-  // 1. Update Modification Timestamps
   updateModificationTimestamp(spreadsheet, sheetName);
-  
-  // 2. Standardize Font
-  range.setFontFamily("Arial").setFontSize(10);
+  e.range.setFontFamily("Arial").setFontSize(10);
 
-  // 3. Perform Data Validation
-  validateSheetData(spreadsheet);
+  if (sheetName === "projectMetadata" || sheetName.startsWith("analysisMetadata")) {
+    validateSheetData(spreadsheet);
+  }
 }
 
-/**
- * Updates the 'Last Modified' and 'Modified By' fields in the README sheet.
- */
 function updateModificationTimestamp(spreadsheet, editedSheetName) {
   const readmeSheet = spreadsheet.getSheetByName("README");
   if (!readmeSheet) return;
 
   const data = readmeSheet.getDataRange().getValues();
-  let timestampRowStart = -1;
+  let listStart = -1;
   for (let i = 0; i < data.length; i++) {
-    if (data[i][0] === "Sheets in this Google Sheet:") {
-      timestampRowStart = i + 2; // Start of sheet list, skipping header
+    const label = data[i][0];
+    if (label === "Sheets in this Google Sheet:" || label === "Modification Timestamp:") {
+      listStart = i + 2;
       break;
     }
   }
+  if (listStart === -1) return;
 
-  if (timestampRowStart === -1) return;
-
-  for (let i = timestampRowStart; i < data.length; i++) {
+  for (let i = listStart; i < data.length; i++) {
     if (data[i][0] === editedSheetName) {
-      const sheetRow = i + 1;
-      const timestamp = new Date().toISOString();
-      readmeSheet.getRange(sheetRow, 2).setValue(timestamp);
-      readmeSheet.getRange(sheetRow, 3).setValue(Session.getActiveUser().getEmail());
+      const row = i + 1;
+      readmeSheet.getRange(row, 2).setValue(new Date().toISOString());
+      readmeSheet.getRange(row, 3).setValue(Session.getActiveUser().getEmail());
       break;
     }
   }
 }
 
-/**
- * Performs several data validation checks across metadata sheets.
- */
-function validateSheetData(spreadsheet) {
-  const projectMetadataSheet = spreadsheet.getSheetByName("projectMetadata");
-  const analysisMetadataSheets = spreadsheet.getSheets().filter(s => s.getName().startsWith("analysisMetadata_"));
-
-  if (!projectMetadataSheet || analysisMetadataSheets.length === 0) {
-    return; // Exit if required sheets don't exist
-  }
-
-  // Get project_id from projectMetadata
-  const projectIdCell = findCellByValue(projectMetadataSheet, "project_id");
-  if (!projectIdCell) return;
-  const projectId = projectMetadataSheet.getRange(projectIdCell.row, projectIdCell.col + 1).getValue();
-
-  // Get assay_name values from projectMetadata
-  const assayNameCell = findCellByValue(projectMetadataSheet, "assay_name");
-  if (!assayNameCell) return;
-  const assayNames = projectMetadataSheet.getRange(assayNameCell.row, assayNameCell.col + 1).getValue().toString().split("|").map(name => name.trim());
-  
-  clearErrorFormatting(spreadsheet); // Clear previous errors before re-validating
-
-  let foundAssayNames = new Set();
-  
-  // Loop through analysis sheets once to perform all checks
-  analysisMetadataSheets.forEach(analysisSheet => {
-    // Check 1: project_id must match projectMetadata
-    const analysisProjectIdCell = findCellByValue(analysisSheet, "project_id");
-    if (analysisProjectIdCell) {
-      const analysisProjectId = analysisSheet.getRange(analysisProjectIdCell.row, analysisProjectIdCell.col + 1).getValue();
-      if (analysisProjectId !== projectId) {
-        addErrorFormatting(analysisSheet, analysisProjectIdCell.row, analysisProjectIdCell.col + 1, "Project ID must match the one in projectMetadata sheet");
-      }
-    }
-
-    // Check 2: assay_name must be one of the values from projectMetadata
-    const analysisAssayNameCell = findCellByValue(analysisSheet, "assay_name");
-    if (analysisAssayNameCell) {
-      const analysisAssayName = analysisSheet.getRange(analysisAssayNameCell.row, analysisAssayNameCell.col + 1).getValue();
-      if (!assayNames.includes(analysisAssayName)) {
-        addErrorFormatting(analysisSheet, analysisAssayNameCell.row, analysisAssayNameCell.col + 1, "Assay name must match one of the values in projectMetadata sheet");
-      } else {
-        foundAssayNames.add(analysisAssayName);
-      }
-    }
-
-    // Check 3: analysis_run_name must be unique within the sheet
-    const analysisRunNameCell = findCellByValue(analysisSheet, "analysis_run_name");
-    if (analysisRunNameCell) {
-      const data = analysisSheet.getDataRange().getValues();
-      const runNameColIndex = analysisRunNameCell.col - 1;
-      const analysisRunNames = new Set();
-      for (let i = 0; i < data.length; i++) {
-        const value = data[i][runNameColIndex];
-        if (value && value.toString().trim() !== "") {
-          if (analysisRunNames.has(value)) {
-            addErrorFormatting(analysisSheet, i + 1, analysisRunNameCell.col, "Duplicate analysis_run_name found in this sheet");
-          } else {
-            analysisRunNames.add(value);
-          }
-        }
-      }
-    }
-  });
-
-  // Check 4: All assay_names from projectMetadata must be used
-  assayNames.forEach(assayName => {
-    if (assayName && !foundAssayNames.has(assayName)) {
-      addErrorFormatting(projectMetadataSheet, assayNameCell.row, assayNameCell.col + 1, `Assay name "${assayName}" must be used in an analysisMetadata sheet`);
-    }
-  });
-}
-
-/**
- * Finds the first cell in a sheet that matches a given value.
- * @returns {{row: number, col: number}|null} Cell coordinates or null if not found.
- */
 function findCellByValue(sheet, searchValue) {
   const data = sheet.getDataRange().getValues();
   for (let i = 0; i < data.length; i++) {
     for (let j = 0; j < data[i].length; j++) {
-      if (data[i][j] === searchValue) {
-        return {row: i + 1, col: j + 1};
-      }
+      if (data[i][j] === searchValue) return { row: i + 1, col: j + 1 };
     }
   }
   return null;
 }
 
-/**
- * Adds red background and an error note to a specified cell.
- */
+function validateSheetData(spreadsheet) {
+  const projectSheet = spreadsheet.getSheetByName("projectMetadata");
+  const analysisSheets = spreadsheet.getSheets().filter(s => s.getName().startsWith("analysisMetadata_"));
+  if (!projectSheet || !analysisSheets.length) return;
+
+  const projectIdCell = findCellByValue(projectSheet, "project_id");
+  const assayNameCell = findCellByValue(projectSheet, "assay_name");
+  if (!projectIdCell || !assayNameCell) return;
+
+  const projectId = projectSheet.getRange(projectIdCell.row, projectIdCell.col + 1).getValue();
+  const assayNames = projectSheet
+    .getRange(assayNameCell.row, assayNameCell.col + 1)
+    .getValue()
+    .toString()
+    .split("|")
+    .map(name => name.trim());
+
+  clearErrorFormatting([projectSheet].concat(analysisSheets));
+
+  const foundAssayNames = new Set();
+  analysisSheets.forEach(analysisSheet => {
+    const analysisProjectIdCell = findCellByValue(analysisSheet, "project_id");
+    if (analysisProjectIdCell) {
+      const analysisProjectId = analysisSheet.getRange(analysisProjectIdCell.row, analysisProjectIdCell.col + 1).getValue();
+      if (analysisProjectId !== projectId) {
+        addErrorFormatting(
+          analysisSheet,
+          analysisProjectIdCell.row,
+          analysisProjectIdCell.col + 1,
+          "Project ID must match the one in projectMetadata sheet"
+        );
+      }
+    }
+
+    const analysisAssayNameCell = findCellByValue(analysisSheet, "assay_name");
+    if (analysisAssayNameCell) {
+      const analysisAssayName = analysisSheet.getRange(analysisAssayNameCell.row, analysisAssayNameCell.col + 1).getValue();
+      if (!assayNames.includes(analysisAssayName)) {
+        addErrorFormatting(
+          analysisSheet,
+          analysisAssayNameCell.row,
+          analysisAssayNameCell.col + 1,
+          "Assay name must match one of the values in projectMetadata sheet"
+        );
+      } else {
+        foundAssayNames.add(analysisAssayName);
+      }
+    }
+
+    const analysisRunNameCell = findCellByValue(analysisSheet, "analysis_run_name");
+    if (analysisRunNameCell) {
+      const data = analysisSheet.getDataRange().getValues();
+      const colIndex = analysisRunNameCell.col - 1;
+      const seen = new Set();
+      for (let i = 0; i < data.length; i++) {
+        const value = data[i][colIndex];
+        if (!value || !value.toString().trim()) continue;
+        if (seen.has(value)) {
+          addErrorFormatting(analysisSheet, i + 1, analysisRunNameCell.col, "Duplicate analysis_run_name found in this sheet");
+        } else {
+          seen.add(value);
+        }
+      }
+    }
+  });
+
+  assayNames.forEach(assayName => {
+    if (assayName && !foundAssayNames.has(assayName)) {
+      addErrorFormatting(
+        projectSheet,
+        assayNameCell.row,
+        assayNameCell.col + 1,
+        `Assay name "${assayName}" must be used in an analysisMetadata sheet`
+      );
+    }
+  });
+}
+
 function addErrorFormatting(sheet, row, col, message) {
   const cell = sheet.getRange(row, col);
   const currentNote = cell.getNote();
   const errorMessage = "ERROR: " + message;
-  
   if (!currentNote.includes(errorMessage)) {
     cell.setNote(currentNote + (currentNote ? "\n" : "") + errorMessage);
   }
-  cell.setBackground("#ff0000"); // Red background
+  cell.setBackground("#ff0000");
 }
 
-/**
- * Clears all error-related formatting (red backgrounds and error notes) from all sheets.
- */
-function clearErrorFormatting(spreadsheet) {
-  const sheets = spreadsheet.getSheets();
+function clearErrorFormatting(sheets) {
   sheets.forEach(sheet => {
-    const dataRange = sheet.getDataRange();
-    const backgrounds = dataRange.getBackgrounds();
-    const notes = dataRange.getNotes();
-    
+    const range = sheet.getDataRange();
+    const backgrounds = range.getBackgrounds();
+    const notes = range.getNotes();
     for (let i = 0; i < backgrounds.length; i++) {
       for (let j = 0; j < backgrounds[i].length; j++) {
-        if (backgrounds[i][j] === "#ff0000") { // If it's our error background color
-          const cell = sheet.getRange(i + 1, j + 1);
-          const note = notes[i][j];
-          if (note) {
-            const nonErrorLines = note.split("\n").filter(line => !line.startsWith("ERROR:"));
-            cell.setNote(nonErrorLines.join("\n"));
-          }
-          cell.setBackground(null); // Remove background color
+        if (backgrounds[i][j] !== "#ff0000") continue;
+        const cell = sheet.getRange(i + 1, j + 1);
+        if (notes[i][j]) {
+          cell.setNote(notes[i][j].split("\n").filter(line => !line.startsWith("ERROR:")).join("\n"));
         }
+        cell.setBackground(null);
       }
     }
   });
 }
 
-/**
- * Reorders only the main metadata sheets by moving entire columns/rows in-place,
- * so data validation, conditional formatting, notes, etc. move with them.
- */
 function reorderMetadataSheets() {
   const ui = SpreadsheetApp.getUi();
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-
-  const confirmMessage =
-    "This will reorder columns/fields in:\n" +
-    "- projectMetadata\n" +
-    "- sampleMetadata\n" +
-    "- experimentRunMetadata\n" +
-    "- analysisMetadata* (all sheets whose name starts with 'analysisMetadata')\n\n" +
-    "It moves existing rows/columns in-place, skips missing fields, and preserves dropdowns and formatting.\n\n" +
-    "Continue?";
-
-  const response = ui.alert("Reorder metadata sheets", confirmMessage, ui.ButtonSet.YES_NO);
+  const response = ui.alert(
+    "Reorder metadata sheets",
+    "This will reorder columns/fields in projectMetadata, sampleMetadata, experimentRunMetadata, and analysisMetadata*.\n\nIt moves existing rows/columns in-place, skips missing fields, and preserves dropdowns and formatting.\n\nContinue?",
+    ui.ButtonSet.YES_NO
+  );
   if (response !== ui.Button.YES) return;
 
-  // Check which sheets have merged cells (moveColumns/moveRows will error on those).
-  const mergedCellSheets = {};
-  spreadsheet.getSheets().forEach(sheet => {
-    const merged = sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).getMergedRanges();
-    if (merged.length > 0) {
-      merged.forEach(range => range.setBackground("yellow"));
-      mergedCellSheets[sheet.getName()] = merged.length;
-    }
-  });
-
   const results = [];
-
-  // Helper: attempt reorder only if the sheet has no merged cells.
   function reorderIfNoMerges(sheet, reorderFn, orderList, label) {
     if (!sheet) {
       results.push(`Skipped "${label}" (sheet not found).`);
       return;
     }
-    if (mergedCellSheets[sheet.getName()]) {
-      results.push(`⚠️ Skipped "${label}" — ${mergedCellSheets[sheet.getName()]} merged range(s) found and highlighted in yellow. Please unmerge them and try again.`);
+    const merged = sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).getMergedRanges();
+    if (merged.length) {
+      merged.forEach(range => range.setBackground("yellow"));
+      results.push(`⚠️ Skipped "${label}" — ${merged.length} merged range(s) found and highlighted in yellow. Please unmerge them and try again.`);
       return;
     }
     results.push(reorderFn(sheet, orderList, label));
   }
 
-  // projectMetadata: move term_name rows
   reorderIfNoMerges(
     spreadsheet.getSheetByName("projectMetadata"),
-    reorderLongFormByTermName_, COLUMN_OR_FIELD_ORDER.projectMetadata, "projectMetadata"
+    reorderLongFormByTermName_,
+    COLUMN_OR_FIELD_ORDER.projectMetadata,
+    "projectMetadata"
   );
-
-  // sampleMetadata: move columns by header row
   reorderIfNoMerges(
     spreadsheet.getSheetByName("sampleMetadata"),
-    reorderWideFormByHeader_, COLUMN_OR_FIELD_ORDER.sampleMetadata, "sampleMetadata"
+    reorderWideFormByHeader_,
+    COLUMN_OR_FIELD_ORDER.sampleMetadata,
+    "sampleMetadata"
   );
-
-  // experimentRunMetadata: move columns by header row
   reorderIfNoMerges(
     spreadsheet.getSheetByName("experimentRunMetadata"),
-    reorderWideFormByHeader_, COLUMN_OR_FIELD_ORDER.experimentRunMetadata, "experimentRunMetadata"
+    reorderWideFormByHeader_,
+    COLUMN_OR_FIELD_ORDER.experimentRunMetadata,
+    "experimentRunMetadata"
   );
 
-  // analysisMetadata*: move term_name rows for all matching sheets
-  {
-    const analysisSheets = spreadsheet.getSheets().filter(s => s.getName().startsWith("analysisMetadata"));
-    if (analysisSheets.length === 0) {
-      results.push('Skipped "analysisMetadata*" (no matching sheets found).');
-    } else {
-      analysisSheets.forEach(s => {
-        reorderIfNoMerges(s, reorderLongFormByTermName_, COLUMN_OR_FIELD_ORDER.analysisMetadata, s.getName());
-      });
-    }
+  const analysisSheets = spreadsheet.getSheets().filter(s => s.getName().startsWith("analysisMetadata"));
+  if (!analysisSheets.length) {
+    results.push('Skipped "analysisMetadata*" (no matching sheets found).');
+  } else {
+    analysisSheets.forEach(s =>
+      reorderIfNoMerges(s, reorderLongFormByTermName_, COLUMN_OR_FIELD_ORDER.analysisMetadata, s.getName())
+    );
   }
 
-  // Safety net: refresh row-3 notes in wide metadata sheets from checklist definitions.
   results.push(refreshRow3NotesFromChecklist_(spreadsheet));
-
   ui.alert(results.filter(Boolean).join("\n\n"));
 }
 
+function checklistDescriptionByTerm_(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName("checklist");
+  if (!sheet || sheet.getLastRow() < 2) return {};
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(v => (v || "").toString().trim());
+  const termCol = headers.indexOf("term_name");
+  const descCol = headers.indexOf("description");
+  if (termCol < 0 || descCol < 0) return {};
+
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const byTerm = {};
+  rows.forEach(row => {
+    const term = (row[termCol] || "").toString().trim();
+    const description = (row[descCol] || "").toString().trim();
+    if (term && description && byTerm[term] == null) byTerm[term] = description;
+  });
+  return byTerm;
+}
+
 function refreshRow3NotesFromChecklist_(spreadsheet) {
-  const build = buildChecklistDefinitionMap_(spreadsheet);
-  const definitionByTerm = build.definitionByTerm;
-  const definitionCount = Object.keys(definitionByTerm).length;
+  const definitionByTerm = checklistDescriptionByTerm_(spreadsheet);
+  const terms = Object.keys(definitionByTerm);
+  if (!terms.length) return "No checklist descriptions were found, so row-3 notes were not updated.";
 
-  if (definitionCount === 0) {
-    return "No checklist definitions were found, so row-3 notes were not updated.";
-  }
-
-  const targetSheetNames = ["sampleMetadata", "experimentRunMetadata"];
-  const results = [
-    `Loaded ${definitionCount} checklist definition(s) from ${build.sourceSheetCount} sheet(s).`,
-  ];
-
-  targetSheetNames.forEach(sheetName => {
+  const results = [`Loaded ${terms.length} checklist description(s) from the checklist sheet.`];
+  ["sampleMetadata", "experimentRunMetadata"].forEach(sheetName => {
     const sheet = spreadsheet.getSheetByName(sheetName);
-    if (!sheet) {
+    if (!sheet || sheet.getLastColumn() < 1) {
       results.push(`Skipped "${sheetName}" (sheet not found).`);
       return;
     }
-
     const lastCol = sheet.getLastColumn();
-    if (lastCol < 1) {
-      results.push(`Skipped "${sheetName}" (empty sheet).`);
-      return;
-    }
-
-    const headerValues = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
-    const existingNotes = sheet.getRange(3, 1, 1, lastCol).getNotes()[0];
-    const updatedNotes = existingNotes.slice();
-
+    const headers = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
+    const notes = sheet.getRange(3, 1, 1, lastCol).getNotes()[0].slice();
     let updatedCount = 0;
-    let matchedHeaders = 0;
-    let missingDefinitions = 0;
-
-    for (let i = 0; i < headerValues.length; i++) {
-      const header = (headerValues[i] || "").toString().trim();
-      if (!header) continue;
-
-      const definition = definitionByTerm[header];
-      if (definition == null || definition === "") {
-        missingDefinitions += 1;
-        continue; // Preserve any existing note if no checklist definition was found.
+    let matched = 0;
+    let missing = 0;
+    headers.forEach((header, i) => {
+      const term = (header || "").toString().trim();
+      if (!term) return;
+      const definition = definitionByTerm[term];
+      if (!definition) {
+        missing += 1;
+        return;
       }
-
-      matchedHeaders += 1;
-      if (updatedNotes[i] !== definition) {
-        updatedNotes[i] = definition;
+      matched += 1;
+      if (!notes[i]) {
+        notes[i] = definition;
         updatedCount += 1;
       }
-    }
-
-    if (updatedCount > 0) {
-      sheet.getRange(3, 1, 1, lastCol).setNotes([updatedNotes]);
-    }
-
-    results.push(
-      `"${sheetName}": updated ${updatedCount} note(s); matched ${matchedHeaders} header(s); no checklist definition for ${missingDefinitions} header(s).`
-    );
+    });
+    if (updatedCount) sheet.getRange(3, 1, 1, lastCol).setNotes([notes]);
+    results.push(`"${sheetName}": updated ${updatedCount} note(s); matched ${matched} header(s); no checklist description for ${missing} header(s).`);
   });
-
   return results.join("\n");
 }
 
-function buildChecklistDefinitionMap_(spreadsheet) {
-  const definitionByTerm = {};
-  let sourceSheetCount = 0;
-  const candidateDefinitionHeaders = [
-    "definition",
-    "description",
-    "term_definition",
-    "term_description",
-    "guidance",
-    "help_text",
-  ];
-
-  spreadsheet.getSheets().forEach(sheet => {
-    const lastRow = sheet.getLastRow();
-    const lastCol = sheet.getLastColumn();
-    if (lastRow < 2 || lastCol < 2) return;
-
-    const headerValues = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
-    const termNameCol = headerValues.indexOf("term_name") + 1;
-    if (termNameCol < 1) return;
-
-    let definitionCol = 0;
-    for (let i = 0; i < candidateDefinitionHeaders.length; i++) {
-      const idx = headerValues.indexOf(candidateDefinitionHeaders[i]);
-      if (idx !== -1) {
-        definitionCol = idx + 1;
-        break;
-      }
-    }
-    if (definitionCol < 1) return;
-
-    const numRows = lastRow - 1;
-    const termValues = sheet.getRange(2, termNameCol, numRows, 1).getValues();
-    const defValues = sheet.getRange(2, definitionCol, numRows, 1).getValues();
-    let usedThisSheet = false;
-
-    for (let r = 0; r < numRows; r++) {
-      const term = (termValues[r][0] || "").toString().trim();
-      const definition = (defValues[r][0] || "").toString().trim();
-      if (!term || !definition) continue;
-      if (definitionByTerm[term] == null) {
-        definitionByTerm[term] = definition;
-      }
-      usedThisSheet = true;
-    }
-
-    if (usedThisSheet) sourceSheetCount += 1;
-  });
-
-  return { definitionByTerm, sourceSheetCount };
-}
-
 function isWideMetadataSheetLayout_(sheet) {
-  // sampleMetadata / experimentRunMetadata layout:
-  // row 1 col 1: "# requirement_level_code"
-  // row 2 col 1: "# section"
-  // row 3: term/field headers (e.g., samp_name in column 1)
   const a1 = (sheet.getRange(1, 1).getValue() || "").toString().trim();
   const a2 = (sheet.getRange(2, 1).getValue() || "").toString().trim();
   return a1 === "# requirement_level_code" && a2 === "# section";
 }
 
+function updateIndexMapAfterMove_(indexMap, srcIndex, destIndex) {
+  if (srcIndex === destIndex) return;
+  Object.keys(indexMap).forEach(k => {
+    let idx = indexMap[k];
+    if (idx === srcIndex) {
+      idx = destIndex;
+    } else if (destIndex < srcIndex && idx >= destIndex && idx < srcIndex) {
+      idx += 1;
+    } else if (destIndex > srcIndex && idx > srcIndex && idx <= destIndex) {
+      idx -= 1;
+    }
+    indexMap[k] = idx;
+  });
+}
+
 function reorderWideFormByHeader_(sheet, desiredHeaderOrder, labelForMessages) {
-  if (!desiredHeaderOrder || desiredHeaderOrder.length === 0) {
+  if (!desiredHeaderOrder || !desiredHeaderOrder.length) {
     return `No column order list provided for "${labelForMessages}". Nothing changed.`;
   }
-
   const lastCol = sheet.getLastColumn();
   const maxRows = sheet.getMaxRows();
   if (lastCol < 1 || maxRows < 1) return `Skipped "${labelForMessages}" (empty sheet).`;
 
   const isWideMeta = isWideMetadataSheetLayout_(sheet);
-  const headerRow = isWideMeta ? 3 : findBestHeaderRow_(sheet, desiredHeaderOrder, 50);
+  const headerRow = isWideMeta ? 3 : 1;
   const headerValues = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
-
   const colByHeader = {};
   headerValues.forEach((h, idx) => {
-    if (!h) return;
-    if (colByHeader[h] == null) colByHeader[h] = idx + 1; // 1-based
+    if (h && colByHeader[h] == null) colByHeader[h] = idx + 1;
   });
 
   const moved = [];
   const missing = [];
-
-  // In wide-metadata layout, column 1 is special (it contains the row labels in rows 1-2,
-  // and the leftmost key field in row 3). We keep it fixed so the sheet doesn't "break".
   let destCol = isWideMeta ? 2 : 1;
   desiredHeaderOrder.forEach(header => {
     const key = (header || "").toString().trim();
     if (!key) return;
-
     const srcCol = colByHeader[key];
     if (srcCol == null) {
       missing.push(key);
       return;
     }
-
-    // Never move the first column on wide-metadata sheets.
-    // If the user includes the column-1 header (e.g., samp_name) in the list, treat it as already placed.
     if (isWideMeta && srcCol === 1) {
       moved.push(key);
       return;
     }
-
     if (srcCol !== destCol) {
       sheet.moveColumns(sheet.getRange(1, srcCol, maxRows, 1), destCol);
       updateIndexMapAfterMove_(colByHeader, srcCol, destCol);
@@ -836,44 +683,36 @@ function reorderWideFormByHeader_(sheet, desiredHeaderOrder, labelForMessages) {
 }
 
 function reorderLongFormByTermName_(sheet, desiredTermOrder, labelForMessages) {
-  if (!desiredTermOrder || desiredTermOrder.length === 0) {
+  if (!desiredTermOrder || !desiredTermOrder.length) {
     return `No field order list provided for "${labelForMessages}". Nothing changed.`;
   }
-
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
   const maxCols = sheet.getMaxColumns();
   if (lastRow < 2 || lastCol < 1) return `Skipped "${labelForMessages}" (no data rows).`;
 
   const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
-  let termNameCol = header.indexOf("term_name") + 1; // 1-based
-  if (termNameCol < 1) {
-    // Fall back: search a bit for "term_name" if headers aren't on row 1 for some reason.
-    termNameCol = findCellByValue(sheet, "term_name")?.col || 0;
-  }
+  let termNameCol = header.indexOf("term_name") + 1;
+  if (termNameCol < 1) termNameCol = findCellByValue(sheet, "term_name")?.col || 0;
   if (termNameCol < 1) return `Skipped "${labelForMessages}" (could not find "term_name" column).`;
 
   const termValues = sheet.getRange(2, termNameCol, lastRow - 1, 1).getValues().map(r => (r[0] || "").toString().trim());
   const rowByTerm = {};
   termValues.forEach((t, i) => {
-    if (!t) return;
-    if (rowByTerm[t] == null) rowByTerm[t] = i + 2; // actual row number
+    if (t && rowByTerm[t] == null) rowByTerm[t] = i + 2;
   });
 
   const moved = [];
   const missing = [];
-
   let destRow = 2;
   desiredTermOrder.forEach(term => {
     const key = (term || "").toString().trim();
     if (!key) return;
-
     const srcRow = rowByTerm[key];
     if (srcRow == null) {
       missing.push(key);
       return;
     }
-
     if (srcRow !== destRow) {
       sheet.moveRows(sheet.getRange(srcRow, 1, 1, maxCols), destRow);
       updateIndexMapAfterMove_(rowByTerm, srcRow, destRow);
@@ -887,58 +726,6 @@ function reorderLongFormByTermName_(sheet, desiredTermOrder, labelForMessages) {
     moved.length ? `Moved to top (in order): ${moved.join(", ")}` : "No rows moved.",
     missing.length ? `Missing (ignored): ${missing.join(", ")}` : "",
   ].filter(Boolean).join("\n");
-}
-
-function findBestHeaderRow_(sheet, desiredHeaders, maxRowsToScan) {
-  const lastRow = Math.min(sheet.getLastRow(), maxRowsToScan);
-  const lastCol = sheet.getLastColumn();
-  if (lastRow < 1 || lastCol < 1) return 1;
-
-  const desiredSet = {};
-  desiredHeaders.forEach(h => {
-    const key = (h || "").toString().trim();
-    if (key) desiredSet[key] = true;
-  });
-
-  let bestRow = 1;
-  let bestScore = -1;
-
-  const values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  for (let r = 0; r < values.length; r++) {
-    let score = 0;
-    for (let c = 0; c < values[r].length; c++) {
-      const cell = (values[r][c] || "").toString().trim();
-      if (desiredSet[cell]) score += 1;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestRow = r + 1;
-    }
-  }
-
-  return bestRow;
-}
-
-/**
- * Updates an index map (key -> 1-based index) after a move operation.
- * Works for both columns and rows.
- */
-function updateIndexMapAfterMove_(indexMap, srcIndex, destIndex) {
-  if (srcIndex === destIndex) return;
-
-  Object.keys(indexMap).forEach(k => {
-    let idx = indexMap[k];
-    if (idx === srcIndex) {
-      idx = destIndex;
-    } else if (destIndex < srcIndex) {
-      // Moving left/up: items in [destIndex, srcIndex) shift right/down by 1
-      if (idx >= destIndex && idx < srcIndex) idx += 1;
-    } else {
-      // Moving right/down: items in (srcIndex, destIndex] shift left/up by 1
-      if (idx > srcIndex && idx <= destIndex) idx -= 1;
-    }
-    indexMap[k] = idx;
-  });
 }
 
 const HIGHLIGHT_COLOR = "#ffff00";
@@ -963,114 +750,65 @@ function restoreHighlightState_(spreadsheet, state) {
   Object.keys(state).forEach(sheetName => {
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) return;
-
     const cellMap = state[sheetName] || {};
-    Object.keys(cellMap).forEach(a1 => {
-      sheet.getRange(a1).setBackground(cellMap[a1]);
-    });
+    Object.keys(cellMap).forEach(a1 => sheet.getRange(a1).setBackground(cellMap[a1]));
   });
 }
 
-function rememberAndHighlightCell_(sheet, row, col, stateForSheet) {
-  const cell = sheet.getRange(row, col);
-  const a1 = cell.getA1Notation();
-  if (!(a1 in stateForSheet)) {
-    stateForSheet[a1] = cell.getBackground();
-  }
-  cell.setBackground(HIGHLIGHT_COLOR);
-}
-
-/**
- * Checks for duplicate samp_names in sampleMetadata and lib_ids
- * in experimentRunMetadata and colors duplicates yellow.
- *
- * Note: this is case-sensitive ("ABC" and "abc" are treated as different values).
- * Existing cell colors are preserved by not clearing backgrounds before the check.
- */
 function highlightDuplicates() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ui = SpreadsheetApp.getUi();
   let totalDuplicates = 0;
   const missingElements = [];
-  const previousState = loadHighlightState_(DUPLICATE_HIGHLIGHT_STATE_KEY);
+  restoreHighlightState_(ss, loadHighlightState_(DUPLICATE_HIGHLIGHT_STATE_KEY));
   const newState = {};
 
-  // Undo only the highlights applied by the previous duplicate-check run.
-  restoreHighlightState_(ss, previousState);
-
-  // Helper function to process a specific sheet and column.
   function findAndHighlight(sheetName, columnName) {
     const sheet = ss.getSheetByName(sheetName);
-
-    // Check if sheet exists.
     if (!sheet) {
       missingElements.push(`Sheet '${sheetName}' was not found.`);
       return;
     }
-
     const lastCol = sheet.getLastColumn();
     const lastRow = sheet.getLastRow();
-
-    // Skip if the sheet doesn't have data below Row 3.
     if (lastRow < 4 || lastCol < 1) return;
 
-    // Get the headers from ROW 3.
-    const headers = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
-    const colIndex = headers.indexOf(columnName);
-
-    // Check if column exists in Row 3.
+    const colIndex = sheet.getRange(3, 1, 1, lastCol).getValues()[0].indexOf(columnName);
     if (colIndex === -1) {
       missingElements.push(`Column header '${columnName}' was not found in Row 3 of '${sheetName}'.`);
       return;
     }
 
     const colNum = colIndex + 1;
-    const numDataRows = lastRow - 3; // Total rows containing data starting from Row 4.
-    const stateForSheet = {};
-
-    // Fetch the data starting from Row 4.
-    const data = sheet.getRange(4, colNum, numDataRows, 1).getValues();
+    const data = sheet.getRange(4, colNum, lastRow - 3, 1).getValues();
     const counts = {};
-
-    // Count occurrences of each value (ignoring blank cells), case-sensitive.
     data.forEach(row => {
       const val = String(row[0]).trim();
-      if (val !== "") {
-        counts[val] = (counts[val] || 0) + 1;
-      }
+      if (val) counts[val] = (counts[val] || 0) + 1;
     });
 
-    // Find which specific cells are duplicates.
-    for (let i = 0; i < data.length; i++) {
-      const val = String(data[i][0]).trim();
-      if (val !== "" && counts[val] > 1) {
-        // i = 0 maps to Row 4 in the sheet grid.
-        rememberAndHighlightCell_(sheet, i + 4, colNum, stateForSheet);
-        totalDuplicates++;
-      }
-    }
-    if (Object.keys(stateForSheet).length > 0) {
-      newState[sheetName] = stateForSheet;
-    }
+    const stateForSheet = {};
+    data.forEach((row, i) => {
+      const val = String(row[0]).trim();
+      if (!val || counts[val] < 2) return;
+      const cell = sheet.getRange(i + 4, colNum);
+      const a1 = cell.getA1Notation();
+      if (!(a1 in stateForSheet)) stateForSheet[a1] = cell.getBackground();
+      cell.setBackground(HIGHLIGHT_COLOR);
+      totalDuplicates += 1;
+    });
+    if (Object.keys(stateForSheet).length) newState[sheetName] = stateForSheet;
   }
 
-  // Run the checks.
-  findAndHighlight('sampleMetadata', 'samp_name');
-  findAndHighlight('experimentRunMetadata', 'lib_id');
+  findAndHighlight("sampleMetadata", "samp_name");
+  findAndHighlight("experimentRunMetadata", "lib_id");
   saveHighlightState_(DUPLICATE_HIGHLIGHT_STATE_KEY, newState);
 
-  // Create the pop-up summary.
-  let msg = "";
-  if (missingElements.length > 0) {
-    msg += "WARNINGS:\n" + missingElements.join("\n") + "\n\n";
-  }
-
-  if (totalDuplicates === 0) {
-    msg += "No duplicates found in either column. Everything looks good!\n\nAfter making edits, run this tool again to refresh highlights.";
-  } else {
-    msg += `Found and highlighted a total of ${totalDuplicates} duplicate cell(s).\n\nAfter making fixes, run this tool again to refresh highlights.`;
-  }
-
+  let msg = missingElements.length ? "WARNINGS:\n" + missingElements.join("\n") + "\n\n" : "";
+  msg +=
+    totalDuplicates === 0
+      ? "No duplicates found in either column. Everything looks good!\n\nAfter making edits, run this tool again to refresh highlights."
+      : `Found and highlighted a total of ${totalDuplicates} duplicate cell(s).\n\nAfter making fixes, run this tool again to refresh highlights.`;
   ui.alert("Duplicate Check Complete", msg, ui.ButtonSet.OK);
 }
 ```
