@@ -143,18 +143,19 @@ In your existing Google Sheet:
 1. Open your Google Sheet.
 2. Click on `Extensions` in the menu, then select `Apps Script`.
 3. Delete any code in the script editor and copy-paste the following code.
-   IMPORTANT: Make sure you copy the FULL script starting from `function onOpen()` (the menu will NOT appear if you only paste `exportSheetsAsTsv()`).
+   IMPORTANT: Make sure you copy the FULL script starting from `const REFERENCE_SHEETS` (the menu will NOT appear if you only paste `exportSheetsAsTsv()`).
    After saving, reload/refresh the Google Sheet tab to trigger `onOpen()` and show a new `FAIReSheets Tools` menu in the Google Sheets UI.
 
 Once the `FAIReSheets Tools` menu appears, you can:
-- Download all sheets as TSV files (for ODE / edna2obis submission)
-- Standardize font across all sheets
-- Reorder `projectMetadata`, `sampleMetadata`, `experimentRunMetadata`, and all `analysisMetadata*` sheets (by moving rows/columns in-place)
-- Update field descriptions (cell notes) from the `checklist` tab
-- Update dropdowns from the `checklist` tab (controlled vocabulary / Boolean fields)
-- Update requirement colors and section labels from the `checklist` tab
-- Apply checklist (notes, then dropdowns, then requirement colors/sections, then append missing fields)
-- Append missing fields from the `checklist` tab (new empty columns/rows at the end only)
+- Download sheets as TSVs (for Ocean DNA Explorer / edna2obis submission)
+- Standardize font across sheets
+- Reorder terms based on Apps Script lists
+- Check / Recheck for duplicate samp_names and lib_ids
+- Update term_name descriptions from the `checklist` tab
+- Update dropdown values from the `checklist` tab
+- Update requirement and section colors from the `checklist` tab
+- Update sheets with new fields from checklist (append missing fields at the end only)
+- Apply all checklist updates (notes, dropdowns, colors/sections, then append)
 
 The reordering tool:
 - Can be run **before or after** you’ve filled the sheet with data (it moves entire rows/columns, so your entered data moves with the fields)
@@ -168,19 +169,181 @@ const REFERENCE_SHEETS = ["README", "Drop-down values", "checklist"];
 const REQ_COLORS = { M: "#E26B0A", HR: "#FFCC00", R: "#FFFF99", O: "#CCFF99" };
 const TARGETED_SECTIONS = ["Targeted assay detection"];
 const METABARCODING_SECTIONS = ["Library preparation sequencing", "Bioinformatics", "OTU/ASV"];
+const FAIRE_ICON_URL = "https://raw.githubusercontent.com/aomlomics/FAIReSheets/main/src/helpers/fairesheets_icon_final.png";
+
+function escapeHtml_(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&" + "quot;");
+}
+
+function reportToHtml_(text) {
+  const lines = String(text || "").split("\n");
+  let html = "";
+  let open = false;
+  function closeList() {
+    if (!open) return;
+    html += "</ul>";
+    open = false;
+  }
+  lines.forEach(raw => {
+    const line = String(raw || "").replace(/\s+$/, "");
+    if (!line) {
+      closeList();
+      return;
+    }
+    const isHead = /:$/.test(line) && line.indexOf(": ") === -1;
+    if (isHead) {
+      closeList();
+      html += "<p><b>" + escapeHtml_(line) + "</b></p>";
+      return;
+    }
+    if (!open) {
+      html += "<ul>";
+      open = true;
+    }
+    html += "<li>" + escapeHtml_(line) + "</li>";
+  });
+  closeList();
+  return html || "<p>Done.</p>";
+}
+
+function popupShell_(bodyHtml, toolId) {
+  const hasRun = !!toolId;
+  return `<!DOCTYPE html>
+<html><head><base target="_top">
+<style>
+body{margin:0;font-family:Arial,sans-serif;font-size:15px;line-height:1.45;color:#222;}
+.wrap{padding:20px 22px 18px;}
+.head{margin:0 0 16px;}
+.head img{width:96px;height:96px;}
+.scroll{max-height:300px;overflow:auto;}
+.scroll ul{margin:6px 0 12px 20px;padding:0;}
+.scroll li{margin:0 0 6px;}
+.scroll p{margin:0 0 10px;}
+.btns{margin-top:16px;}
+button{font-family:Arial,sans-serif;font-size:14px;padding:8px 16px;margin-right:8px;}
+#status{color:#555;margin-top:10px;}
+</style></head><body>
+<div class="wrap">
+  <div class="head"><img src="${FAIRE_ICON_URL}" alt="FAIReSheets"></div>
+  <div id="main" class="scroll">${bodyHtml}</div>
+  <div class="btns" id="btns">
+    ${hasRun
+      ? '<button type="button" onclick="go()">Continue</button><button type="button" onclick="google.script.host.close()">Cancel</button>'
+      : '<button type="button" onclick="google.script.host.close()">Close</button>'}
+  </div>
+  <div id="status"></div>
+</div>
+<script>
+var toolId = ${JSON.stringify(toolId || "")};
+function go() {
+  document.getElementById("btns").style.display = "none";
+  document.getElementById("status").textContent = "Working...";
+  google.script.run.withSuccessHandler(done).withFailureHandler(fail).runNamedTool(toolId);
+}
+function done(res) {
+  document.getElementById("status").textContent = "";
+  if (typeof res === "string") res = { html: res };
+  document.getElementById("main").innerHTML = (res.html || "") + (res.previewHtml || "");
+  var btns = document.getElementById("btns");
+  btns.style.display = "block";
+  if (res.append) {
+    btns.innerHTML = '<button type="button" onclick="doAppend()">Append fields</button><button type="button" onclick="google.script.host.close()">Skip</button>';
+  } else {
+    btns.innerHTML = '<button type="button" onclick="google.script.host.close()">Close</button>';
+  }
+}
+function doAppend() {
+  document.getElementById("btns").style.display = "none";
+  document.getElementById("status").textContent = "Working...";
+  google.script.run.withSuccessHandler(function(html) {
+    document.getElementById("status").textContent = "";
+    document.getElementById("main").innerHTML = html;
+    var btns = document.getElementById("btns");
+    btns.style.display = "block";
+    btns.innerHTML = '<button type="button" onclick="google.script.host.close()">Close</button>';
+  }).withFailureHandler(fail).appendMissingFieldsNow();
+}
+function fail(err) {
+  document.getElementById("status").textContent = "";
+  document.getElementById("main").innerHTML = "<p>" + escapeHtml_(err && err.message ? err.message : String(err)) + "</p>";
+  var btns = document.getElementById("btns");
+  btns.style.display = "block";
+  btns.innerHTML = '<button type="button" onclick="google.script.host.close()">Close</button>';
+}
+function escapeHtml_(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+</script>
+</body></html>`;
+}
+
+function showToolPopup_(title, bodyHtml, toolId) {
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(popupShell_(bodyHtml, toolId)).setWidth(520).setHeight(480),
+    title
+  );
+}
+
+function showInfoPopup_(title, bodyHtml) {
+  showToolPopup_(title, bodyHtml, "");
+}
+
+function needChecklist_() {
+  if (SpreadsheetApp.getActiveSpreadsheet().getSheetByName("checklist")) return true;
+  showInfoPopup_("Checklist", "<p>No checklist tab. Import a checklist CSV onto a sheet named checklist.</p>");
+  return false;
+}
+
+function runNamedTool(toolId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (toolId === "export") return { html: reportToHtml_(exportSheetsAsTsv_(ss)) };
+  if (toolId === "reorder") return { html: reportToHtml_(reorderMetadataSheets_(ss)) };
+  if (toolId === "notes") return { html: reportToHtml_(updateFieldDescriptionsFromChecklist_(ss)) };
+  if (toolId === "dropdowns") return { html: reportToHtml_(updateDropdownsFromChecklist_(ss)) };
+  if (toolId === "colors") return { html: reportToHtml_(updateRequirementColorsFromChecklist_(ss)) };
+  if (toolId === "append") return { html: reportToHtml_(appendMissingFields_(planMissingFields_(ss))) };
+  if (toolId === "apply") {
+    const text = [
+      "Field descriptions:",
+      updateFieldDescriptionsFromChecklist_(ss),
+      "",
+      "Dropdowns:",
+      updateDropdownsFromChecklist_(ss),
+      "",
+      "Requirement colors and sections:",
+      updateRequirementColorsFromChecklist_(ss),
+    ].join("\n");
+    const plan = planMissingFields_(ss);
+    const n = countToAdd_(plan);
+    return {
+      html: reportToHtml_(text) + (n ? "" : reportToHtml_(appendMissingFields_(plan))),
+      append: n > 0,
+      previewHtml: n ? formatAppendPreviewHtml_(plan) : "",
+    };
+  }
+  return { html: "<p>Unknown tool.</p>" };
+}
+
+function appendMissingFieldsNow() {
+  return reportToHtml_(appendMissingFields_(planMissingFields_(SpreadsheetApp.getActiveSpreadsheet())));
+}
 
 function onOpen() {
   SpreadsheetApp.getUi()
       .createMenu('FAIReSheets Tools')
-      .addItem('Download all sheets as TSV', 'exportSheetsAsTsv')
-      .addItem('Standardize font across all sheets', 'standardizeFontAcrossAllSheets')
-      .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
-      .addItem('Update field descriptions from checklist', 'updateFieldDescriptionsFromChecklist')
-      .addItem('Update dropdowns from checklist', 'updateDropdownsFromChecklist')
-      .addItem('Update requirement colors and sections from checklist', 'updateRequirementColorsFromChecklist')
-      .addItem('Apply checklist', 'applyChecklist')
-      .addItem('Append missing fields from checklist', 'appendMissingFieldsFromChecklist')
-      .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
+      .addItem('Download sheets as TSVs', 'exportSheetsAsTsv')
+      .addItem('Standardize font across sheets', 'standardizeFontAcrossAllSheets')
+      .addItem('Reorder terms based on Apps Script lists', 'reorderMetadataSheets')
+      .addItem('Check / Recheck for duplicate samp_names and lib_ids', 'highlightDuplicates')
+      .addItem('Update term_name descriptions from checklist', 'updateFieldDescriptionsFromChecklist')
+      .addItem('Update dropdown values from checklist', 'updateDropdownsFromChecklist')
+      .addItem('Update requirement and section colors from checklist', 'updateRequirementColorsFromChecklist')
+      .addItem('Update sheets with new fields from checklist', 'appendMissingFieldsFromChecklist')
+      .addItem('Apply all checklist updates', 'applyChecklist')
       .addToUi();
   standardizeFontAcrossAllSheetsOnce_();
 }
@@ -315,25 +478,20 @@ function standardizeFontAcrossAllSheets() {
 }
 
 function exportSheetsAsTsv() {
-  const ui = SpreadsheetApp.getUi();
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  showToolPopup_(
+    "Download sheets as TSVs",
+    "<p>Saves TSV files to a new folder in My Drive.</p><p>README, Dropdown values, and checklist are skipped.</p>",
+    "export"
+  );
+}
+
+function exportSheetsAsTsv_(spreadsheet) {
   const spreadsheetName = spreadsheet.getName();
   const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd_HHmm");
   const folderName = spreadsheetName + "_TSVs_" + timestamp;
-
-  const response = ui.alert(
-    "Export Sheets as TSV",
-    'This will create a new folder in your Google Drive home directory named:\n\n"' +
-      folderName +
-      '"\n\nData sheets will be exported as TSV files (README, Drop-down values, and checklist are skipped).\n\nContinue?',
-    ui.ButtonSet.YES_NO
-  );
-  if (response !== ui.Button.YES) return;
-
   const folder = DriveApp.getRootFolder().createFolder(folderName);
   const filesCreated = [];
   const errors = [];
-
   spreadsheet.getSheets().forEach(sheet => {
     const sheetName = sheet.getName();
     if (REFERENCE_SHEETS.includes(sheetName)) return;
@@ -350,13 +508,15 @@ function exportSheetsAsTsv() {
       errors.push(`Error for sheet "${sheetName}": ${e.message}`);
     }
   });
-
-  let message = "";
+  const lines = [];
   if (filesCreated.length) {
-    message += `Successfully exported ${filesCreated.length} sheets to folder "${folderName}" in your Google Drive.\n\nFiles:\n${filesCreated.join("\n")}`;
+    lines.push(`Exported ${filesCreated.length} sheets to "${folderName}".`);
+    filesCreated.forEach(f => lines.push(f));
+  } else {
+    lines.push("No sheets were exported.");
   }
-  if (errors.length) message += `\n\nErrors encountered:\n${errors.join("\n")}`;
-  ui.alert(message || "No sheets were exported.");
+  errors.forEach(e => lines.push(e));
+  return lines.join("\n");
 }
 
 function onEdit(e) {
@@ -515,15 +675,14 @@ function clearErrorFormatting(sheets) {
 }
 
 function reorderMetadataSheets() {
-  const ui = SpreadsheetApp.getUi();
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const response = ui.alert(
-    "Reorder metadata sheets",
-    "This will reorder columns/fields in projectMetadata, sampleMetadata, experimentRunMetadata, and analysisMetadata*.\n\nIt moves existing rows/columns in-place, skips missing fields, and preserves dropdowns and formatting.\n\nContinue?",
-    ui.ButtonSet.YES_NO
+  showToolPopup_(
+    "Reorder terms",
+    "<p>Moves existing rows/columns in place on projectMetadata, sampleMetadata, experimentRunMetadata, and analysisMetadata*.</p><p>Missing terms are skipped. Dropdowns and formatting stay with the fields.</p>",
+    "reorder"
   );
-  if (response !== ui.Button.YES) return;
+}
 
+function reorderMetadataSheets_(spreadsheet) {
   const results = [];
   function reorderIfNoMerges(sheet, reorderFn, orderList, label) {
     if (!sheet) {
@@ -539,7 +698,7 @@ function reorderMetadataSheets() {
           "Merged cells block reordering. Unmerge this range, then run Reorder again."
         );
       });
-      results.push(`⚠️ Skipped "${label}" — ${merged.length} merged range(s) found and highlighted in yellow. Please unmerge them and try again.`);
+      results.push(`Skipped "${label}": ${merged.length} merged range(s) highlighted in yellow. Unmerge and run again.`);
       return;
     }
     results.push(reorderFn(sheet, orderList, label));
@@ -573,7 +732,7 @@ function reorderMetadataSheets() {
     );
   }
 
-  ui.alert(results.filter(Boolean).join("\n\n"));
+  return results.filter(Boolean).join("\n");
 }
 
 function checklistCol_(headers, name) {
@@ -725,15 +884,9 @@ function runPerMetadataSheet_(spreadsheet, byTerm, wideFn, longFn, emptyMsg) {
   return results.join("\n");
 }
 
-function runChecklistMenu_(title, message, runner) {
-  const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss.getSheetByName("checklist")) {
-    ui.alert("No checklist sheet found. Import a checklist CSV onto a tab named checklist first.");
-    return;
-  }
-  if (ui.alert(title, message, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
-  ui.alert(runner(ss));
+function runChecklistMenu_(title, bodyHtml, toolId) {
+  if (!needChecklist_()) return;
+  showToolPopup_(title, bodyHtml, toolId);
 }
 
 function updateFieldDescriptionsFromChecklist_(spreadsheet) {
@@ -748,9 +901,9 @@ function updateFieldDescriptionsFromChecklist_(spreadsheet) {
 
 function updateFieldDescriptionsFromChecklist() {
   runChecklistMenu_(
-    "Update field descriptions",
-    "This overwrites field notes (the hover descriptions) using the checklist tab. It does not change any cell values.\n\nContinue?",
-    updateFieldDescriptionsFromChecklist_
+    "Update term_name descriptions",
+    "<p>Rebuilds hover notes from the checklist tab.</p><p>Cell values are not changed.</p>",
+    "notes"
   );
 }
 
@@ -924,9 +1077,9 @@ function updateDropdownsFromChecklist_(spreadsheet) {
 
 function updateDropdownsFromChecklist() {
   runChecklistMenu_(
-    "Update dropdowns from checklist",
-    "This updates dropdown lists from the checklist tab for controlled vocabulary and Boolean fields. Other checklist fields have dropdown validation cleared. User-defined fields not in the checklist are left unchanged. Cell values are not changed.\n\nContinue?",
-    updateDropdownsFromChecklist_
+    "Update dropdown values",
+    "<p>Sets dropdowns for controlled vocabulary and Boolean fields.</p><p>Other checklist fields have leftover dropdowns cleared. User-defined fields are left alone. Cell values are not changed.</p>",
+    "dropdowns"
   );
 }
 
@@ -1055,33 +1208,17 @@ function updateRequirementColorsFromChecklist_(spreadsheet) {
 
 function updateRequirementColorsFromChecklist() {
   runChecklistMenu_(
-    "Update requirement colors and sections",
-    "This updates requirement codes, their colors, and section labels from the checklist tab. It does not change data values or field notes.\n\nContinue?",
-    updateRequirementColorsFromChecklist_
+    "Update requirement and section colors",
+    "<p>Updates requirement codes, colors, and section labels from the checklist tab.</p><p>Data values and notes are not changed.</p>",
+    "colors"
   );
-}
-
-function applyChecklist_(spreadsheet) {
-  const parts = [
-    "Field descriptions:",
-    updateFieldDescriptionsFromChecklist_(spreadsheet),
-    "",
-    "Dropdowns:",
-    updateDropdownsFromChecklist_(spreadsheet),
-    "",
-    "Requirement colors and sections:",
-    updateRequirementColorsFromChecklist_(spreadsheet),
-    "",
-    confirmAndAppendMissing_(spreadsheet),
-  ];
-  return parts.join("\n");
 }
 
 function applyChecklist() {
   runChecklistMenu_(
-    "Apply checklist",
-    "This updates field notes, dropdowns, then requirement colors and section labels from the checklist tab. If any fields are missing, a second prompt will list them before anything is appended. Existing data values are not changed.\n\nContinue?",
-    applyChecklist_
+    "Apply all checklist updates",
+    "<p>Updates notes, dropdowns, then colors.</p><p>If fields are missing, you will see the list before any are added. Cell values are not changed.</p>",
+    "apply"
   );
 }
 
@@ -1271,17 +1408,16 @@ function countToAdd_(plan) {
   return Object.keys(plan.toAdd).reduce((n, k) => n + plan.toAdd[k].items.length, 0);
 }
 
-function formatAppendPreview_(plan) {
-  const lines = [
-    "These missing fields will be appended as NEW empty columns/rows at the end. Existing cells are not changed.",
-    "",
-  ];
+function formatAppendPreviewHtml_(plan) {
+  let html = "<p>New empty columns/rows at the end. Existing cells are not changed.</p>";
   Object.keys(plan.toAdd).forEach(name => {
-    const terms = plan.toAdd[name].items.map(i => i.term);
-    lines.push(name + " (" + terms.length + "): " + terms.join(", "));
+    html += "<p><b>" + escapeHtml_(name) + " (" + plan.toAdd[name].items.length + ")</b></p><ul>";
+    plan.toAdd[name].items.forEach(item => {
+      html += "<li>" + escapeHtml_(item.term) + "</li>";
+    });
+    html += "</ul>";
   });
-  lines.push("", "Continue?");
-  return lines.join("\n");
+  return html;
 }
 
 function clearNewRange_(range) {
@@ -1366,30 +1502,18 @@ function appendMissingFields_(plan) {
   return lines.join("\n");
 }
 
-function confirmAndAppendMissing_(spreadsheet) {
-  const plan = planMissingFields_(spreadsheet);
-  if (!countToAdd_(plan)) return appendMissingFields_(plan);
-  const ui = SpreadsheetApp.getUi();
-  if (ui.alert("Append missing fields", formatAppendPreview_(plan), ui.ButtonSet.YES_NO) !== ui.Button.YES) {
-    return "Append: cancelled. No columns/rows were added.";
-  }
-  return appendMissingFields_(plan);
-}
-
 function appendMissingFieldsFromChecklist() {
-  const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss.getSheetByName("checklist")) {
-    ui.alert("No checklist sheet found. Import a checklist CSV onto a tab named checklist first.");
-    return;
-  }
-  const plan = planMissingFields_(ss);
+  if (!needChecklist_()) return;
+  const plan = planMissingFields_(SpreadsheetApp.getActiveSpreadsheet());
   if (!countToAdd_(plan)) {
-    ui.alert(appendMissingFields_(plan));
+    showInfoPopup_("Update sheets with new fields", reportToHtml_(appendMissingFields_(plan)));
     return;
   }
-  if (ui.alert("Append missing fields", formatAppendPreview_(plan), ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
-  ui.alert(appendMissingFields_(plan));
+  showToolPopup_(
+    "Update sheets with new fields",
+    formatAppendPreviewHtml_(plan),
+    "append"
+  );
 }
 
 function isWideMetadataSheetLayout_(sheet) {
@@ -1552,7 +1676,6 @@ function restoreHighlightState_(spreadsheet, state) {
 
 function highlightDuplicates() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ui = SpreadsheetApp.getUi();
   let totalDuplicates = 0;
   const missingElements = [];
   restoreHighlightState_(ss, loadHighlightState_(DUPLICATE_HIGHLIGHT_STATE_KEY));
@@ -1600,12 +1723,12 @@ function highlightDuplicates() {
   findAndHighlight("experimentRunMetadata", "lib_id");
   saveHighlightState_(DUPLICATE_HIGHLIGHT_STATE_KEY, newState);
 
-  let msg = missingElements.length ? "WARNINGS:\n" + missingElements.join("\n") + "\n\n" : "";
+  let msg = missingElements.length ? "Warnings:\n" + missingElements.join("\n") + "\n" : "";
   msg +=
     totalDuplicates === 0
-      ? "No duplicates found in either column. Everything looks good!\n\nAfter making edits, run this tool again to refresh highlights."
-      : `Found and highlighted a total of ${totalDuplicates} duplicate cell(s).\n\nAfter making fixes, run this tool again to refresh highlights.`;
-  ui.alert("Duplicate Check Complete", msg, ui.ButtonSet.OK);
+      ? "No duplicates found. Run again after edits to refresh highlights."
+      : `Highlighted ${totalDuplicates} duplicate cell(s). Run again after fixes to refresh highlights.`;
+  showInfoPopup_("Check / Recheck duplicates", reportToHtml_(msg));
 }
 ```
 
@@ -1627,9 +1750,9 @@ For submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) an
 
 **Steps to Download Your Data:**
 1.  After adding the Apps Script (see instructions below), a new menu will appear in your Google Sheet called **FAIReSheets Tools**.
-2.  Click **FAIReSheets Tools > Download all sheets as TSV**.
-3.  A confirmation dialog will appear showing the folder name that will be created.
-4.  Click "Yes" to proceed. The script will create a new folder in your Google Drive home directory (e.g., `FAIRe_NOAA_YourProject_20241112_TSVs_20241112_1430`) and save all sheets as TSV files there.
+2.  Click **FAIReSheets Tools > Download sheets as TSVs**.
+3.  A dialog will ask you to continue. README, Drop-down values, and checklist are skipped.
+4.  Click Continue. The script creates a timestamped folder in My Drive (e.g., `FAIRe_NOAA_YourProject_20241112_TSVs_20241112_1430`) and saves the data sheets as TSV files there.
 
 This will download all your sheets as submission-ready TSV files. The Apps Script also provides helpful data validation features that run automatically when you edit your sheet, helping you catch common errors before submission.
 
