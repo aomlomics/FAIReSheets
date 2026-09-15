@@ -242,7 +242,10 @@ body{margin:0;font-family:Arial,sans-serif;font-size:15px;line-height:1.45;color
 .scroll p{margin:0 0 10px;}
 .btns{margin-top:16px;}
 button{font-family:Arial,sans-serif;font-size:14px;padding:8px 16px;margin-right:8px;}
-#status{color:#555;margin-top:10px;}
+#status{margin-top:10px;}
+.working{display:flex;align-items:center;gap:10px;color:#174ea6;font-size:14px;}
+.spinner{width:22px;height:22px;border:3px solid #c5d5f0;border-top-color:#174ea6;border-radius:50%;animation:faire-spin .75s linear infinite;flex-shrink:0;}
+@keyframes faire-spin{to{transform:rotate(360deg);}}
 </style></head><body>
 <div class="wrap">
   <div class="head"><img src="${FAIRE_ICON_URL}" alt="FAIReSheets"></div>
@@ -256,13 +259,19 @@ button{font-family:Arial,sans-serif;font-size:14px;padding:8px 16px;margin-right
 </div>
 <script>
 var toolId = ${JSON.stringify(toolId || "")};
+function setWorking() {
+  document.getElementById("status").innerHTML = '<div class="working"><div class="spinner"></div><span>Working...</span></div>';
+}
+function clearWorking() {
+  document.getElementById("status").innerHTML = "";
+}
 function go() {
   document.getElementById("btns").style.display = "none";
-  document.getElementById("status").textContent = "Working...";
+  setWorking();
   google.script.run.withSuccessHandler(done).withFailureHandler(fail).runNamedTool(toolId);
 }
 function done(res) {
-  document.getElementById("status").textContent = "";
+  clearWorking();
   if (typeof res === "string") res = { html: res };
   document.getElementById("main").innerHTML = (res.html || "") + (res.previewHtml || "");
   var btns = document.getElementById("btns");
@@ -275,9 +284,9 @@ function done(res) {
 }
 function doAppend() {
   document.getElementById("btns").style.display = "none";
-  document.getElementById("status").textContent = "Working...";
+  setWorking();
   google.script.run.withSuccessHandler(function(html) {
-    document.getElementById("status").textContent = "";
+    clearWorking();
     document.getElementById("main").innerHTML = html;
     var btns = document.getElementById("btns");
     btns.style.display = "block";
@@ -285,7 +294,7 @@ function doAppend() {
   }).withFailureHandler(fail).appendMissingFieldsNow();
 }
 function fail(err) {
-  document.getElementById("status").textContent = "";
+  clearWorking();
   document.getElementById("main").innerHTML = "<p>" + escapeHtml_(err && err.message ? err.message : String(err)) + "</p>";
   var btns = document.getElementById("btns");
   btns.style.display = "block";
