@@ -151,6 +151,7 @@ Once the `FAIReSheets Tools` menu appears, you can:
 - Standardize font across all sheets
 - Reorder `projectMetadata`, `sampleMetadata`, `experimentRunMetadata`, and all `analysisMetadata*` sheets (by moving rows/columns in-place)
 - Update field descriptions (cell notes) from the `checklist` tab
+- Update dropdowns from the `checklist` tab (controlled vocabulary / Boolean fields)
 
 The reordering tool:
 - Can be run **before or after** you’ve filled the sheet with data (it moves entire rows/columns, so your entered data moves with the fields)
@@ -169,6 +170,7 @@ function onOpen() {
       .addItem('Standardize font across all sheets', 'standardizeFontAcrossAllSheets')
       .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
       .addItem('Update field descriptions from checklist', 'updateFieldDescriptionsFromChecklist')
+      .addItem('Update dropdowns from checklist', 'updateDropdownsFromChecklist')
       .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
       .addToUi();
   standardizeFontAcrossAllSheetsOnce_();
@@ -681,12 +683,7 @@ function updateLongFormNotes_(sheet, noteByTerm) {
   return `"${sheet.getName()}": updated ${updated} note(s); matched ${matched} field(s); no checklist row for ${missing} field(s).`;
 }
 
-function updateFieldDescriptionsFromChecklist_(spreadsheet) {
-  const noteByTerm = checklistNoteByTerm_(spreadsheet);
-  const termCount = Object.keys(noteByTerm).length;
-  if (!termCount) return "No checklist sheet (or no term_name rows) found, so notes were not updated.";
-
-  const results = [`Loaded ${termCount} checklist field(s) from the checklist sheet.`];
+function forEachMetadataSheet_(spreadsheet, visit) {
   const namedSheets = [
     "projectMetadata",
     "sampleMetadata",
@@ -698,19 +695,29 @@ function updateFieldDescriptionsFromChecklist_(spreadsheet) {
     "ampData",
   ];
   const seen = {};
-  function updateOne(sheet) {
+  function visitOne(sheet) {
     if (!sheet || seen[sheet.getName()]) return;
     seen[sheet.getName()] = true;
+    visit(sheet);
+  }
+  namedSheets.forEach(name => visitOne(spreadsheet.getSheetByName(name)));
+  spreadsheet.getSheets().forEach(sheet => {
+    if (sheet.getName().startsWith("analysisMetadata")) visitOne(sheet);
+  });
+}
+
+function updateFieldDescriptionsFromChecklist_(spreadsheet) {
+  const noteByTerm = checklistNoteByTerm_(spreadsheet);
+  const termCount = Object.keys(noteByTerm).length;
+  if (!termCount) return "No checklist sheet (or no term_name rows) found, so notes were not updated.";
+
+  const results = [`Loaded ${termCount} checklist field(s) from the checklist sheet.`];
+  forEachMetadataSheet_(spreadsheet, sheet => {
     if (isWideMetadataSheetLayout_(sheet)) {
       results.push(updateWideSheetNotes_(sheet, noteByTerm));
     } else {
       results.push(updateLongFormNotes_(sheet, noteByTerm));
     }
-  }
-
-  namedSheets.forEach(name => updateOne(spreadsheet.getSheetByName(name)));
-  spreadsheet.getSheets().forEach(sheet => {
-    if (sheet.getName().startsWith("analysisMetadata")) updateOne(sheet);
   });
   return results.join("\n");
 }
@@ -729,6 +736,163 @@ function updateFieldDescriptionsFromChecklist() {
   );
   if (response !== ui.Button.YES) return;
   ui.alert(updateFieldDescriptionsFromChecklist_(spreadsheet));
+}
+
+function isChecklistDropdownTerm_(termType) {
+  const t = (termType || "").toString().trim().toLowerCase();
+  return t === "controlled vocabulary" || t === "boolean";
+}
+
+function splitVocabOptions_(cv) {
+  return (cv || "")
+    .toString()
+    .split("|")
+    .map(s => s.trim())
+    .filter(s => s);
+}
+
+function checklistVocabByTerm_(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName("checklist");
+  if (!sheet || sheet.getLastRow() < 2) return {};
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(v => (v || "").toString().trim());
+  if (checklistCol_(headers, "term_name") < 0) return {};
+
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const byTerm = {};
+  rows.forEach(row => {
+    const term = checklistCell_(row, headers, "term_name");
+    if (!term || byTerm[term] != null) return;
+    const termType = checklistCell_(row, headers, "term_type");
+    const options = splitVocabOptions_(checklistCell_(row, headers, "controlled_vocabulary_options"));
+    byTerm[term] = {
+      isVocab: isChecklistDropdownTerm_(termType),
+      options: options,
+    };
+  });
+  return byTerm;
+}
+
+function dropdownRuleFromOptions_(options) {
+  return SpreadsheetApp.newDataValidation()
+    .requireValueInList(options, true)
+    .setAllowInvalid(false)
+    .build();
+}
+
+function applyDropdownOrClear_(range, info) {
+  if (info.isVocab && info.options.length) {
+    range.setDataValidation(dropdownRuleFromOptions_(info.options));
+    return "updated";
+  }
+  range.clearDataValidations();
+  return "no vocab";
+}
+
+function wideDropdownEndRow_(sheet) {
+  const dataStart = 4;
+  const minEnd = dataStart + 9;
+  return Math.max(sheet.getLastRow(), minEnd);
+}
+
+function updateWideSheetDropdowns_(sheet, vocabByTerm) {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return `Skipped "${sheet.getName()}" (empty sheet).`;
+
+  const headerRow = 3;
+  const startRow = headerRow + 1;
+  const endRow = wideDropdownEndRow_(sheet);
+  const numRows = endRow - startRow + 1;
+  if (numRows < 1) return `Skipped "${sheet.getName()}" (no data rows).`;
+
+  const headers = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+  let updated = 0;
+  let skipped = 0;
+  let noVocab = 0;
+  headers.forEach((header, i) => {
+    const term = (header || "").toString().trim();
+    if (!term) return;
+    const info = vocabByTerm[checklistTermKey_(term)];
+    if (!info) {
+      skipped += 1;
+      return;
+    }
+    const result = applyDropdownOrClear_(sheet.getRange(startRow, i + 1, numRows, 1), info);
+    if (result === "updated") updated += 1;
+    else noVocab += 1;
+  });
+  return `"${sheet.getName()}": updated ${updated} dropdown(s); skipped ${skipped} field(s) not in checklist; no vocab for ${noVocab} field(s).`;
+}
+
+function longFormValueStartCol_(headers, termCol) {
+  const projectLevel = headers.indexOf("project_level") + 1;
+  if (projectLevel > 0) return projectLevel;
+  return termCol + 1;
+}
+
+function updateLongFormDropdowns_(sheet, vocabByTerm) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return `Skipped "${sheet.getName()}" (no data rows).`;
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
+  let termCol = headers.indexOf("term_name") + 1;
+  if (termCol < 1) termCol = findCellByValue(sheet, "term_name")?.col || 0;
+  if (termCol < 1) return `Skipped "${sheet.getName()}" (could not find "term_name" column).`;
+
+  const valueStart = longFormValueStartCol_(headers, termCol);
+  if (valueStart > lastCol) return `Skipped "${sheet.getName()}" (no value columns).`;
+  const numCols = lastCol - valueStart + 1;
+
+  const terms = sheet.getRange(2, termCol, lastRow - 1, 1).getValues();
+  let updated = 0;
+  let skipped = 0;
+  let noVocab = 0;
+  terms.forEach((row, i) => {
+    const term = (row[0] || "").toString().trim();
+    if (!term) return;
+    const info = vocabByTerm[checklistTermKey_(term)];
+    if (!info) {
+      skipped += 1;
+      return;
+    }
+    const result = applyDropdownOrClear_(sheet.getRange(i + 2, valueStart, 1, numCols), info);
+    if (result === "updated") updated += 1;
+    else noVocab += 1;
+  });
+  return `"${sheet.getName()}": updated ${updated} dropdown(s); skipped ${skipped} field(s) not in checklist; no vocab for ${noVocab} field(s).`;
+}
+
+function updateDropdownsFromChecklist_(spreadsheet) {
+  const vocabByTerm = checklistVocabByTerm_(spreadsheet);
+  const termCount = Object.keys(vocabByTerm).length;
+  if (!termCount) return "No checklist sheet (or no term_name rows) found, so dropdowns were not updated.";
+
+  const results = [`Loaded ${termCount} checklist field(s) from the checklist sheet.`];
+  forEachMetadataSheet_(spreadsheet, sheet => {
+    if (isWideMetadataSheetLayout_(sheet)) {
+      results.push(updateWideSheetDropdowns_(sheet, vocabByTerm));
+    } else {
+      results.push(updateLongFormDropdowns_(sheet, vocabByTerm));
+    }
+  });
+  return results.join("\n");
+}
+
+function updateDropdownsFromChecklist() {
+  const ui = SpreadsheetApp.getUi();
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet.getSheetByName("checklist")) {
+    ui.alert("No checklist sheet found. Import a checklist CSV onto a tab named checklist first.");
+    return;
+  }
+  const response = ui.alert(
+    "Update dropdowns from checklist",
+    "This updates dropdown lists from the checklist tab for controlled vocabulary and Boolean fields. Other checklist fields have dropdown validation cleared. User-defined fields not in the checklist are left unchanged. Cell values are not changed.\n\nContinue?",
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) return;
+  ui.alert(updateDropdownsFromChecklist_(spreadsheet));
 }
 
 function isWideMetadataSheetLayout_(sheet) {
