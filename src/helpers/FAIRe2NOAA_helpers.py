@@ -11,6 +11,7 @@ import gspread_formatting as gsf
 import webbrowser
 
 from src.helpers.api_retry import retry_on_429, batch_update_with_retry
+from src.helpers.checklist_sheet import find_checklist_xlsx
 
 
 def build_vocab_map_from_noaa_checklist(noaa_checklist_path):
@@ -158,11 +159,7 @@ def remove_bioinfo_fields_from_project_metadata(worksheet, bioinfo_fields):
         updated_data = worksheet.get_all_values()
         
         # Use the NOAA checklist for vocabulary data
-        import os
-        import pandas as pd
-        
-        noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
-                                         'input', 'FAIRe_NOAA_checklist_v1.0.2.xlsx')
+        noaa_checklist_path = find_checklist_xlsx(None, use_noaa=True)
         
         # Read the checklist sheet
         checklist_df = pd.read_excel(noaa_checklist_path, sheet_name='checklist')

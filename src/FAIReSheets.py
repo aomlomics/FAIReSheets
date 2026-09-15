@@ -6,9 +6,9 @@ sample types, assay type, and requirement levels of your choice.
 
 Instructions:
 
-Step 1: Save the input files in the working directory
-    - FAIRe_checklist_v1.0.xlsx
-    - FAIRe_checklist_v1.0_FULLtemplate.xlsx
+Step 1: Save the input files in the `input/` directory
+    - FAIRe_checklist_*.xlsx (or FAIRe_NOAA_checklist_*.xlsx)
+    - FAIRe_checklist_*_FULLtemplate.xlsx
 
 Step 2: Create a Google Sheet and note its ID
     - Create an empty Google Sheet
@@ -37,7 +37,7 @@ TQDM_AVAILABLE = False
 # Import functions from separate modules
 from src.helpers.readme_sheet import create_readme_sheet
 from src.helpers.dropdown_sheet import create_dropdown_sheet
-from src.helpers.checklist_sheet import create_checklist_sheet
+from src.helpers.checklist_sheet import create_checklist_sheet, find_checklist_xlsx, find_fulltemplate_xlsx
 from src.helpers.project_metadata_sheet import create_project_metadata_sheet
 from src.helpers.sample_metadata_sheet import create_sample_metadata_sheet
 from src.helpers.experiment_metadata_sheet import create_experiment_metadata_sheet
@@ -156,34 +156,18 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     # Update the spreadsheet title to include the project_id
     spreadsheet.update_title(f"FAIRe_{project_id}")
     
-    # Set input files
+    # Set input files. Version comes from whatever .xlsx is in input/, not from code.
+    input_dir_resolved = input_dir if input_dir else 'input'
+    input_file_path = find_checklist_xlsx(input_dir_resolved, use_noaa=use_noaa_vocab)
+    input_file_name = os.path.basename(input_file_path)
 
-    FAIRe_checklist_ver = 'v1.0.2'  # For regular checklist
-    FAIRe_NOAA_checklist_ver = 'v1.0.2'  # For NOAA checklist  
-    input_file_name = f'FAIRe_NOAA_checklist_{FAIRe_NOAA_checklist_ver}.xlsx'
-    
-    sheet_name = 'checklist'
-    
-    # Set the file paths correctly
-    if input_dir:
-        input_file_path = os.path.join(input_dir, input_file_name)
-    else:
-        # Look in the 'input' directory by default
-        input_file_path = os.path.join('input', input_file_name)
-    
     # Read input checklist
     try:
-        input_df = pd.read_excel(input_file_path, sheet_name=sheet_name)
+        input_df = pd.read_excel(input_file_path, sheet_name='checklist')
     except FileNotFoundError:
         raise FileNotFoundError(f"Could not find input file {input_file_path}. Please ensure it is in the specified directory.")
-    
-    # Full template file name
-    full_temp_file_name = 'FAIRe_checklist_v1.0.2_FULLtemplate.xlsx'
-    if input_dir:
-        full_temp_file_path = os.path.join(input_dir, full_temp_file_name)
-    else:
-        # Look in the 'input' directory by default
-        full_temp_file_path = os.path.join('input', full_temp_file_name)
+
+    full_temp_file_path = find_fulltemplate_xlsx(input_dir_resolved)
         
     try:
         # Read Excel file using pandas instead of openpyxl directly
@@ -272,7 +256,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         sampleMetadata_user=sampleMetadata_user,
         experimentRunMetadata_user=experimentRunMetadata_user,
         color_styles=color_styles,
-        FAIRe_checklist_ver=FAIRe_checklist_ver
+        FAIRe_checklist_ver=None
     )
     
     # Update progress bar for README
@@ -306,7 +290,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     else:
         print("Drop-down values sheet created (3/{})".format(len(operations)))
 
-    # Create checklist sheet (full NOAA checklist, unfiltered)
+    # Create checklist sheet (full source checklist, unfiltered)
     if TQDM_AVAILABLE:
         pbar.set_description("Creating checklist sheet...")
 
@@ -337,7 +321,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         projectMetadata_user=projectMetadata_user,
         color_styles=color_styles,
         vocab_df=vocab_df,
-        FAIRe_checklist_ver=FAIRe_checklist_ver
+        input_file_name=input_file_name
     )
     
     # Update progress bar for projectMetadata

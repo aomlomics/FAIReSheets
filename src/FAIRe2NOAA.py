@@ -14,6 +14,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 
+from src.helpers.checklist_sheet import find_checklist_xlsx
 from src.helpers.FAIRe2NOAA_helpers import (
     get_bioinformatics_fields,
     remove_bioinfo_fields_from_project_metadata,
@@ -71,10 +72,9 @@ def FAIRe2NOAA(client=None, project_id=None):
     except Exception as e:
         raise Exception(f"Error reading NOAA config file: {e}")
 
-    # Get NOAA checklist path
-    noaa_checklist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'input', 'FAIRe_NOAA_checklist_v1.0.2.xlsx')
-    if not os.path.exists(noaa_checklist_path):
-        raise FileNotFoundError(f"NOAA checklist not found at {noaa_checklist_path}")
+    # Get NOAA checklist path from input/; version comes from the filename
+    input_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'input')
+    noaa_checklist_path = find_checklist_xlsx(input_dir, use_noaa=True)
     
     # Total number of steps
     total_steps = 7

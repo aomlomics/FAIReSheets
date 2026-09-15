@@ -12,3 +12,6 @@ __pycache__/
 # Virtual environments
 venv/
 .venv/
+
+# Generated checklist drop-in for Google Sheets
+input/checklist.csv

@@ -6,7 +6,7 @@ import pandas as pd
 import gspread_formatting as gsf
 
 def create_project_metadata_sheet(worksheet, full_temp_file_name, input_df, req_lev, assay_type,
-                                  project_id, assay_name, projectMetadata_user, color_styles, vocab_df, FAIRe_checklist_ver):
+                                  project_id, assay_name, projectMetadata_user, color_styles, vocab_df, input_file_name):
     """Create and format the projectMetadata sheet."""
     
     # Read the projectMetadata sheet from the template
@@ -50,9 +50,6 @@ def create_project_metadata_sheet(worksheet, full_temp_file_name, input_df, req_
     
     # Replace 'nan' strings with empty strings
     project_meta_df = project_meta_df.replace('nan', '')
-    
-    # Get the input file name for the checklist version
-    input_file_name = f'FAIRe_checklist_{FAIRe_checklist_ver}.xlsx'
     
     # Pre-fill values from config.yaml
     project_meta_df.loc[project_meta_df['term_name'] == 'project_id', 'project_level'] = project_id

@@ -123,6 +123,21 @@ Copy and Paste the following Google Apps Script for some helpful features, like 
 
 NOTE: FAIReSheets now standardizes font family + font size across all sheets during template generation, so the font-related Apps Script features are optional.
 
+### Updating the `checklist` tab on an existing Google Sheet
+
+FAIReSheets copies the current checklist into a `checklist` tab, which is used by the Google Apps Script for helpful data validation and template updater functions. When a new checklist is released, put the `.xlsx` in the `input/` folder, then paste its filename:
+
+```bash
+python export_checklist.py FAIRe_NOAA_checklist_v1.0.3.xlsx
+```
+
+That writes `input/checklist.csv` LOCALLY. This is the same table as the `checklist` tab that FAIReSheets generates. Then:
+
+In your existing Google Sheet:
+1. Open the `checklist` tab.
+2. **File → Import → Upload** `input/checklist.csv`.
+3. Choose **Replace current sheet**.
+
 ### Adding the Google Apps Script
 
 1. Open your Google Sheet.
