@@ -153,6 +153,7 @@ Once the `FAIReSheets Tools` menu appears, you can:
 - Update field descriptions (cell notes) from the `checklist` tab
 - Update dropdowns from the `checklist` tab (controlled vocabulary / Boolean fields)
 - Update requirement colors and section labels from the `checklist` tab
+- Apply checklist (notes, then dropdowns, then requirement colors/sections)
 
 The reordering tool:
 - Can be run **before or after** you’ve filled the sheet with data (it moves entire rows/columns, so your entered data moves with the fields)
@@ -174,6 +175,7 @@ function onOpen() {
       .addItem('Update field descriptions from checklist', 'updateFieldDescriptionsFromChecklist')
       .addItem('Update dropdowns from checklist', 'updateDropdownsFromChecklist')
       .addItem('Update requirement colors and sections from checklist', 'updateRequirementColorsFromChecklist')
+      .addItem('Apply checklist', 'applyChecklist')
       .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
       .addToUi();
   standardizeFontAcrossAllSheetsOnce_();
@@ -1052,6 +1054,27 @@ function updateRequirementColorsFromChecklist() {
     "Update requirement colors and sections",
     "This updates requirement codes, their colors, and section labels from the checklist tab. It does not change data values or field notes.\n\nContinue?",
     updateRequirementColorsFromChecklist_
+  );
+}
+
+function applyChecklist_(spreadsheet) {
+  return [
+    "Field descriptions:",
+    updateFieldDescriptionsFromChecklist_(spreadsheet),
+    "",
+    "Dropdowns:",
+    updateDropdownsFromChecklist_(spreadsheet),
+    "",
+    "Requirement colors and sections:",
+    updateRequirementColorsFromChecklist_(spreadsheet),
+  ].join("\n");
+}
+
+function applyChecklist() {
+  runChecklistMenu_(
+    "Apply checklist",
+    "This updates field notes, dropdowns, then requirement colors and section labels from the checklist tab. Data values are not changed.\n\nContinue?",
+    applyChecklist_
   );
 }
 
