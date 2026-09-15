@@ -133,15 +133,25 @@ Put the new checklist `.xlsx` in `input/`, then export it to CSV:
 python export_checklist.py FAIRe_NOAA_checklist_v1.0.3.xlsx
 ```
 
-That writes `input/checklist.csv` (same table as the `checklist` tab FAIReSheets generates). In your Google Sheet:
+That writes `input/checklist.csv` (same table as the `checklist` tab FAIReSheets generates).
 
-1. Open the `checklist` tab.
-2. **File → Import → Upload** `input/checklist.csv`.
-3. Choose **Replace current sheet**.
+#### Import `checklist.csv` into Google Sheets (File → Import)
 
-This file is used by the Apps Script to update your existing FAIRe templates with new fields, updated descriptions, dropdown values, requirement levels, and more.
+Do **not** copy and paste the checklist. Instead:
 
-Your FAIRe templates include a checklist tab. When a new checklist is published, export a fresh `input/checklist.csv` and replace the outdated checklist tab in your Google Sheet.
+1. Open your FAIRe Google Sheet in the browser.
+2. Click the **`checklist`** tab at the bottom so it is the active sheet.
+3. **File → Import** (spreadsheet menu bar at the top).
+4. In the import window, open the **Upload** tab.
+5. Select `input/checklist.csv` on your computer (for example `FAIReSheets\input\checklist.csv`).
+6. **Import location:** **Replace current sheet**.
+7. **Separator type:** **Comma**. Click **Import data**.
+
+**Alternative:** Upload `checklist.csv` to Google Drive first. In step 4, use the **My Drive** tab instead of Upload. Keep **Replace current sheet** with the `checklist` tab selected.
+
+**Check it worked:** Row 1 is headers (`data_type`, `term_name`, …). You should have 400+ data rows across many columns. If all text is in column A only, you pasted instead of importing.
+
+The Apps Script reads this tab for checklist updates (notes, dropdowns, colors, new fields). When a new checklist is published, repeat export + import to refresh the tab.
 
 ### Adding the Google Apps Script
 
