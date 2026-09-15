@@ -150,6 +150,7 @@ Once the `FAIReSheets Tools` menu appears, you can:
 - Download all sheets as TSV files (for ODE / edna2obis submission)
 - Standardize font across all sheets
 - Reorder `projectMetadata`, `sampleMetadata`, `experimentRunMetadata`, and all `analysisMetadata*` sheets (by moving rows/columns in-place)
+- Update field descriptions (cell notes) from the `checklist` tab
 
 The reordering tool:
 - Can be run **before or after** you’ve filled the sheet with data (it moves entire rows/columns, so your entered data moves with the fields)
@@ -167,6 +168,7 @@ function onOpen() {
       .addItem('Download all sheets as TSV', 'exportSheetsAsTsv')
       .addItem('Standardize font across all sheets', 'standardizeFontAcrossAllSheets')
       .addItem('Reorder metadata sheets (column/field order)', 'reorderMetadataSheets')
+      .addItem('Update field descriptions from checklist', 'updateFieldDescriptionsFromChecklist')
       .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
       .addToUi();
   standardizeFontAcrossAllSheetsOnce_();
@@ -554,65 +556,173 @@ function reorderMetadataSheets() {
     );
   }
 
-  results.push(refreshRow3NotesFromChecklist_(spreadsheet));
   ui.alert(results.filter(Boolean).join("\n\n"));
 }
 
-function checklistDescriptionByTerm_(spreadsheet) {
+function checklistCol_(headers, name) {
+  return headers.indexOf(name);
+}
+
+function checklistCell_(row, headers, name) {
+  const idx = checklistCol_(headers, name);
+  if (idx < 0) return "";
+  return (row[idx] || "").toString().trim();
+}
+
+function noteFromChecklistRow_(row, headers) {
+  const req = checklistCell_(row, headers, "requirement_level");
+  const cond = checklistCell_(row, headers, "requirement_level_condition");
+  const desc = checklistCell_(row, headers, "description");
+  const example = checklistCell_(row, headers, "example");
+  const termType = checklistCell_(row, headers, "term_type");
+  const cv = checklistCell_(row, headers, "controlled_vocabulary_options");
+  const fmt = checklistCell_(row, headers, "fixed_format");
+  const parts = [];
+  if (req) parts.push(cond ? `Requirement level: ${req} (${cond})` : `Requirement level: ${req}`);
+  if (desc) parts.push(`Description: ${desc}`);
+  if (example) parts.push(`Example: ${example}`);
+  if (termType === "controlled vocabulary" && cv) {
+    parts.push(`Field type: ${termType} (${cv})`);
+  } else if (termType === "fixed format" && fmt) {
+    parts.push(`Field type: ${termType} (${fmt})`);
+  } else if (termType) {
+    parts.push(`Field type: ${termType}`);
+  }
+  return parts.join("\n");
+}
+
+function checklistNoteByTerm_(spreadsheet) {
   const sheet = spreadsheet.getSheetByName("checklist");
   if (!sheet || sheet.getLastRow() < 2) return {};
 
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(v => (v || "").toString().trim());
-  const termCol = headers.indexOf("term_name");
-  const descCol = headers.indexOf("description");
-  if (termCol < 0 || descCol < 0) return {};
+  if (checklistCol_(headers, "term_name") < 0) return {};
 
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
   const byTerm = {};
   rows.forEach(row => {
-    const term = (row[termCol] || "").toString().trim();
-    const description = (row[descCol] || "").toString().trim();
-    if (term && description && byTerm[term] == null) byTerm[term] = description;
+    const term = checklistCell_(row, headers, "term_name");
+    const note = noteFromChecklistRow_(row, headers);
+    if (term && note && byTerm[term] == null) byTerm[term] = note;
   });
   return byTerm;
 }
 
-function refreshRow3NotesFromChecklist_(spreadsheet) {
-  const definitionByTerm = checklistDescriptionByTerm_(spreadsheet);
-  const terms = Object.keys(definitionByTerm);
-  if (!terms.length) return "No checklist descriptions were found, so row-3 notes were not updated.";
+function checklistTermKey_(term) {
+  const key = (term || "").toString().trim();
+  if (key.startsWith("detected_notDetected_")) return "detected_notDetected";
+  return key;
+}
 
-  const results = [`Loaded ${terms.length} checklist description(s) from the checklist sheet.`];
-  ["sampleMetadata", "experimentRunMetadata"].forEach(sheetName => {
-    const sheet = spreadsheet.getSheetByName(sheetName);
-    if (!sheet || sheet.getLastColumn() < 1) {
-      results.push(`Skipped "${sheetName}" (sheet not found).`);
+function updateWideSheetNotes_(sheet, noteByTerm) {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return `Skipped "${sheet.getName()}" (empty sheet).`;
+
+  const headerRow = 3;
+  const headers = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+  const notes = sheet.getRange(headerRow, 1, 1, lastCol).getNotes()[0].slice();
+  let updated = 0;
+  let matched = 0;
+  let missing = 0;
+  headers.forEach((header, i) => {
+    const term = (header || "").toString().trim();
+    if (!term) return;
+    const note = noteByTerm[checklistTermKey_(term)];
+    if (!note) {
+      missing += 1;
       return;
     }
-    const lastCol = sheet.getLastColumn();
-    const headers = sheet.getRange(3, 1, 1, lastCol).getValues()[0];
-    const notes = sheet.getRange(3, 1, 1, lastCol).getNotes()[0].slice();
-    let updatedCount = 0;
-    let matched = 0;
-    let missing = 0;
-    headers.forEach((header, i) => {
-      const term = (header || "").toString().trim();
-      if (!term) return;
-      const definition = definitionByTerm[term];
-      if (!definition) {
-        missing += 1;
-        return;
-      }
-      matched += 1;
-      if (!notes[i]) {
-        notes[i] = definition;
-        updatedCount += 1;
-      }
-    });
-    if (updatedCount) sheet.getRange(3, 1, 1, lastCol).setNotes([notes]);
-    results.push(`"${sheetName}": updated ${updatedCount} note(s); matched ${matched} header(s); no checklist description for ${missing} header(s).`);
+    matched += 1;
+    if (notes[i] !== note) {
+      notes[i] = note;
+      updated += 1;
+    }
+  });
+  if (updated) sheet.getRange(headerRow, 1, 1, lastCol).setNotes([notes]);
+  return `"${sheet.getName()}": updated ${updated} note(s); matched ${matched} field(s); no checklist row for ${missing} field(s).`;
+}
+
+function updateLongFormNotes_(sheet, noteByTerm) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return `Skipped "${sheet.getName()}" (no data rows).`;
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || "").toString().trim());
+  let termCol = headers.indexOf("term_name") + 1;
+  if (termCol < 1) termCol = findCellByValue(sheet, "term_name")?.col || 0;
+  if (termCol < 1) return `Skipped "${sheet.getName()}" (could not find "term_name" column).`;
+
+  const terms = sheet.getRange(2, termCol, lastRow - 1, 1).getValues();
+  const notes = sheet.getRange(2, termCol, lastRow - 1, 1).getNotes();
+  let updated = 0;
+  let matched = 0;
+  let missing = 0;
+  terms.forEach((row, i) => {
+    const term = (row[0] || "").toString().trim();
+    if (!term) return;
+    const note = noteByTerm[checklistTermKey_(term)];
+    if (!note) {
+      missing += 1;
+      return;
+    }
+    matched += 1;
+    if (notes[i][0] !== note) {
+      notes[i][0] = note;
+      updated += 1;
+    }
+  });
+  if (updated) sheet.getRange(2, termCol, lastRow - 1, 1).setNotes(notes);
+  return `"${sheet.getName()}": updated ${updated} note(s); matched ${matched} field(s); no checklist row for ${missing} field(s).`;
+}
+
+function updateFieldDescriptionsFromChecklist_(spreadsheet) {
+  const noteByTerm = checklistNoteByTerm_(spreadsheet);
+  const termCount = Object.keys(noteByTerm).length;
+  if (!termCount) return "No checklist sheet (or no term_name rows) found, so notes were not updated.";
+
+  const results = [`Loaded ${termCount} checklist field(s) from the checklist sheet.`];
+  const namedSheets = [
+    "projectMetadata",
+    "sampleMetadata",
+    "experimentRunMetadata",
+    "taxaRaw",
+    "taxaFinal",
+    "stdData",
+    "eLowQuantData",
+    "ampData",
+  ];
+  const seen = {};
+  function updateOne(sheet) {
+    if (!sheet || seen[sheet.getName()]) return;
+    seen[sheet.getName()] = true;
+    if (isWideMetadataSheetLayout_(sheet)) {
+      results.push(updateWideSheetNotes_(sheet, noteByTerm));
+    } else {
+      results.push(updateLongFormNotes_(sheet, noteByTerm));
+    }
+  }
+
+  namedSheets.forEach(name => updateOne(spreadsheet.getSheetByName(name)));
+  spreadsheet.getSheets().forEach(sheet => {
+    if (sheet.getName().startsWith("analysisMetadata")) updateOne(sheet);
   });
   return results.join("\n");
+}
+
+function updateFieldDescriptionsFromChecklist() {
+  const ui = SpreadsheetApp.getUi();
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet.getSheetByName("checklist")) {
+    ui.alert("No checklist sheet found. Import a checklist CSV onto a tab named checklist first.");
+    return;
+  }
+  const response = ui.alert(
+    "Update field descriptions",
+    "This overwrites field notes (the hover descriptions) using the checklist tab. It does not change any cell values.\n\nContinue?",
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) return;
+  ui.alert(updateFieldDescriptionsFromChecklist_(spreadsheet));
 }
 
 function isWideMetadataSheetLayout_(sheet) {
