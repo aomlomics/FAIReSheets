@@ -32,9 +32,9 @@ def create_readme_sheet(worksheet, input_file_name, req_lev, sample_type, assay_
         ['Sheet Name', 'Timestamp', 'Email']
     ]
     
-    # Get all worksheet names except README and Drop-down values
+    # Get all worksheet names except README and reference sheets
     sheet_names = [ws.title for ws in worksheet.spreadsheet.worksheets() 
-                  if ws.title not in ["README", "Drop-down values"]]
+                  if ws.title not in ["README", "Drop-down values", "checklist"]]
     
     # Create rows for each sheet (empty timestamp and email cells)
     readme_timestamp_rows = [[name, '', ''] for name in sheet_names]

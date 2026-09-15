@@ -1,12 +1,11 @@
 /* ODE Design System */
 :root {
-    --background: #141824;
-    --card-bg: #1E2337;
-    --primary-text: #E2E8F0;
-    --secondary-text: #E2E8F0;  /* Changed to white */
-    --light-blue: #7DBAE5;  /* Light blue for icons and non-button elements */
-    --accent: #1E3A8A;  /* Dark blue for buttons only */
-    --accent-hover: #1E40AF;  /* Slightly lighter dark blue for button hover */
+    --background: #ffffff;
+    --card-bg: #f3f4f6;
+    --primary-text: #111827;
+    --secondary-text: #374151;
+    --accent: #1E3A8A;
+    --accent-hover: #1E40AF;
     --success-green: #10B981;
 }
 
@@ -69,12 +68,12 @@ header {
 h1 {
     font-size: 2.4rem;
     margin: 0 0 1rem 0;
-    color: var(--light-blue);  /* Changed to light blue */
+    color: var(--primary-text);
 }
 
 .subtitle {
     font-size: 1.3rem;  /* Increased from 1.25rem */
-    color: var(--secondary-text);  /* Now white */
+    color: var(--secondary-text);
     margin: 0 0 2rem 0;
 }
 
@@ -99,16 +98,17 @@ h1 {
     border-radius: 1rem;
     padding: 2rem;
     text-align: center;
-    transition: transform 0.2s ease-in-out;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 
 .card:hover {
     transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
 }
 
 .card i {
     font-size: 2.5rem;
-    color: var(--light-blue);
+    color: var(--accent);
     margin-bottom: 1.5rem;
 }
 
@@ -128,7 +128,7 @@ h1 {
 .button {
     display: inline-block;
     background-color: var(--accent);
-    color: var(--primary-text);
+    color: #ffffff;
     padding: 0.75rem 1.5rem;
     border-radius: 0.75rem;
     text-decoration: none;

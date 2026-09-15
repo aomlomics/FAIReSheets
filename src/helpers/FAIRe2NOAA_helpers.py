@@ -1425,9 +1425,9 @@ def update_readme_sheet_for_FAIRe2NOAA(spreadsheet, config):
             elif row and row[0] == 'Sheets in this Google sheet:':
                 sheets_section_start = i
         
-        # Get all worksheet names except README and Drop-down values
+        # Get all worksheet names except README and reference sheets
         sheet_names = [ws.title for ws in spreadsheet.worksheets() 
-                      if ws.title not in ["README", "Drop-down values"]]
+                      if ws.title not in ["README", "Drop-down values", "checklist"]]
         
         # Prepare batch requests for updating content and formatting
         batch_requests = []
@@ -1784,7 +1784,7 @@ def update_readme_sheet_for_FAIRe2NOAA(spreadsheet, config):
                 ["	- In Google Sheets, go to Extensions > Apps Script > Copy and paste the script > Hit Save"],
                 ["6. Ensure all mandatory (M) fields are filled before submission."],
                 ["7. Now your data is ready for submission to ODE and edna2obis!"],
-                ["8. For each sheet, (except for the README and Drop-down values), download them as a TSV file. This is required for ODE and edna2obis submission."],
+                ["8. For each sheet, (except for the README, Drop-down values, and checklist), download them as a TSV file. This is required for ODE and edna2obis submission."],
                 ["	- In Google Sheets, go to File > Download > TSV, for each sheet."],
                 ["9. For ODE Submission, go here: https://www.oceandnaexplorer.org/submit"],
                 ["10. For edna2obis Submission, go here: https://github.com/aomlomics/edna2obis"],

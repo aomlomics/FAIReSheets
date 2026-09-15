@@ -37,6 +37,7 @@ TQDM_AVAILABLE = False
 # Import functions from separate modules
 from src.helpers.readme_sheet import create_readme_sheet
 from src.helpers.dropdown_sheet import create_dropdown_sheet
+from src.helpers.checklist_sheet import create_checklist_sheet
 from src.helpers.project_metadata_sheet import create_project_metadata_sheet
 from src.helpers.sample_metadata_sheet import create_sample_metadata_sheet
 from src.helpers.experiment_metadata_sheet import create_experiment_metadata_sheet
@@ -206,7 +207,7 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     
     # Create or clear sheets
     # First create a list of all sheets we'll need (excluding README which will use Sheet1)
-    sheet_names = ["projectMetadata", "sampleMetadata", "Drop-down values"]
+    sheet_names = ["projectMetadata", "sampleMetadata", "Drop-down values", "checklist"]
     
     # Add assay-type specific sheets
     if assay_type == 'metabarcoding':
@@ -304,6 +305,21 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
         pbar.set_description(f"Drop-down values created [3/{len(operations)}]")
     else:
         print("Drop-down values sheet created (3/{})".format(len(operations)))
+
+    # Create checklist sheet (full NOAA checklist, unfiltered)
+    if TQDM_AVAILABLE:
+        pbar.set_description("Creating checklist sheet...")
+
+    create_checklist_sheet(
+        worksheet=worksheets["checklist"],
+        checklist_df=input_df
+    )
+
+    if TQDM_AVAILABLE:
+        pbar.update(1)
+        pbar.set_description(f"checklist sheet created [4/{len(operations)}]")
+    else:
+        print("checklist sheet created (4/{})".format(len(operations)))
     
     # ----- Project Metadata Sheet (Known to be slow) -----
     if TQDM_AVAILABLE:
@@ -327,9 +343,9 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     # Update progress bar for projectMetadata
     if TQDM_AVAILABLE:
         pbar.update(1)
-        pbar.set_description(f"Project Metadata created [4/{len(operations)}]")
+        pbar.set_description(f"Project Metadata created [5/{len(operations)}]")
     else:
-        print("Project Metadata sheet created (4/{})".format(len(operations)))
+        print("Project Metadata sheet created (5/{})".format(len(operations)))
     
     # ----- Sample Metadata Sheet (Known to be slow) -----
     if TQDM_AVAILABLE:
@@ -352,9 +368,9 @@ def FAIReSheets(req_lev=['M', 'HR', 'R', 'O'],
     # Update progress bar for sampleMetadata
     if TQDM_AVAILABLE:
         pbar.update(1)
-        pbar.set_description(f"Sample Metadata created [5/{len(operations)}]")
+        pbar.set_description(f"Sample Metadata created [6/{len(operations)}]")
     else:
-        print("Sample Metadata sheet created (5/{})".format(len(operations)))
+        print("Sample Metadata sheet created (6/{})".format(len(operations)))
     
     # Create assay-type specific sheets
     if assay_type == 'metabarcoding':
