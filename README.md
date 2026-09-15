@@ -153,7 +153,8 @@ Once the `FAIReSheets Tools` menu appears, you can:
 - Update field descriptions (cell notes) from the `checklist` tab
 - Update dropdowns from the `checklist` tab (controlled vocabulary / Boolean fields)
 - Update requirement colors and section labels from the `checklist` tab
-- Apply checklist (notes, then dropdowns, then requirement colors/sections)
+- Apply checklist (notes, then dropdowns, then requirement colors/sections, then append missing fields)
+- Append missing fields from the `checklist` tab (new empty columns/rows at the end only)
 
 The reordering tool:
 - Can be run **before or after** you’ve filled the sheet with data (it moves entire rows/columns, so your entered data moves with the fields)
@@ -165,6 +166,8 @@ The reordering tool:
 ```javascript
 const REFERENCE_SHEETS = ["README", "Drop-down values", "checklist"];
 const REQ_COLORS = { M: "#E26B0A", HR: "#FFCC00", R: "#FFFF99", O: "#CCFF99" };
+const TARGETED_SECTIONS = ["Targeted assay detection"];
+const METABARCODING_SECTIONS = ["Library preparation sequencing", "Bioinformatics", "OTU/ASV"];
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -176,6 +179,7 @@ function onOpen() {
       .addItem('Update dropdowns from checklist', 'updateDropdownsFromChecklist')
       .addItem('Update requirement colors and sections from checklist', 'updateRequirementColorsFromChecklist')
       .addItem('Apply checklist', 'applyChecklist')
+      .addItem('Append missing fields from checklist', 'appendMissingFieldsFromChecklist')
       .addItem('Check/Refresh duplicate samp_names and lib_ids', 'highlightDuplicates')
       .addToUi();
   standardizeFontAcrossAllSheetsOnce_();
@@ -1058,7 +1062,7 @@ function updateRequirementColorsFromChecklist() {
 }
 
 function applyChecklist_(spreadsheet) {
-  return [
+  const parts = [
     "Field descriptions:",
     updateFieldDescriptionsFromChecklist_(spreadsheet),
     "",
@@ -1067,15 +1071,325 @@ function applyChecklist_(spreadsheet) {
     "",
     "Requirement colors and sections:",
     updateRequirementColorsFromChecklist_(spreadsheet),
-  ].join("\n");
+    "",
+    confirmAndAppendMissing_(spreadsheet),
+  ];
+  return parts.join("\n");
 }
 
 function applyChecklist() {
   runChecklistMenu_(
     "Apply checklist",
-    "This updates field notes, dropdowns, then requirement colors and section labels from the checklist tab. Data values are not changed.\n\nContinue?",
+    "This updates field notes, dropdowns, then requirement colors and section labels from the checklist tab. If any fields are missing, a second prompt will list them before anything is appended. Existing data values are not changed.\n\nContinue?",
     applyChecklist_
   );
+}
+
+function pipeList_(s) {
+  return String(s || "").split("|").map(v => v.trim()).filter(Boolean);
+}
+
+function dataTypeMatchesSheet_(dataType, sheetName) {
+  return pipeList_(dataType).some(token => {
+    if (token === sheetName || token === "NOAA" + sheetName) return true;
+    return sheetName.startsWith("analysisMetadata") && (token === "analysisMetadata" || token === "NOAAanalysisMetadata");
+  });
+}
+
+function sheetTermSet_(sheet) {
+  const set = {};
+  function add(t) {
+    t = String(t || "").trim();
+    if (!t) return;
+    set[t] = true;
+    set[checklistTermKey_(t)] = true;
+  }
+  if (isWideMetadataSheetLayout_(sheet)) {
+    const lastCol = sheet.getLastColumn();
+    if (lastCol > 0) sheet.getRange(3, 1, 1, lastCol).getValues()[0].forEach(add);
+    return set;
+  }
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return set;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => String(v || "").trim());
+  let termCol = headers.indexOf("term_name") + 1;
+  if (termCol < 1) termCol = findCellByValue(sheet, "term_name")?.col || 0;
+  if (termCol < 1) return set;
+  sheet.getRange(2, termCol, lastRow - 1, 1).getValues().forEach(r => add(r[0]));
+  return set;
+}
+
+function sheetReqLevelSet_(sheet) {
+  const set = {};
+  function add(v) {
+    v = String(v || "").trim();
+    if (REQ_COLORS[v]) set[v] = true;
+  }
+  if (isWideMetadataSheetLayout_(sheet)) {
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 2) return set;
+    sheet.getRange(1, 2, 1, lastCol - 1).getValues()[0].forEach(add);
+    return set;
+  }
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return set;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => String(v || "").trim());
+  const reqCol = headers.indexOf("requirement_level_code") + 1;
+  if (!reqCol) return set;
+  sheet.getRange(2, reqCol, lastRow - 1, 1).getValues().forEach(r => add(r[0]));
+  return set;
+}
+
+function projectTermValue_(spreadsheet, term) {
+  const sheet = spreadsheet.getSheetByName("projectMetadata");
+  if (!sheet) return "";
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return "";
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => String(v || "").trim());
+  let termCol = headers.indexOf("term_name") + 1;
+  if (termCol < 1) termCol = findCellByValue(sheet, "term_name")?.col || 0;
+  if (termCol < 1) return "";
+  const terms = sheet.getRange(2, termCol, lastRow - 1, 1).getValues();
+  let row = -1;
+  for (let i = 0; i < terms.length; i++) {
+    if (String(terms[i][0] || "").trim() === term) {
+      row = i + 2;
+      break;
+    }
+  }
+  if (row < 0) return "";
+  const valueStart = longFormValueStartCol_(headers, termCol);
+  if (valueStart > lastCol) return "";
+  const vals = sheet.getRange(row, valueStart, 1, lastCol - valueStart + 1).getValues()[0];
+  for (let i = 0; i < vals.length; i++) {
+    const v = String(vals[i] || "").trim();
+    if (v) return v;
+  }
+  return "";
+}
+
+function sampleTypeAllows_(specificity, sampleTypes) {
+  const spec = String(specificity || "").trim();
+  if (!spec || spec.toUpperCase() === "ALL") return "ok";
+  if (!sampleTypes.length) return "blank";
+  const specParts = pipeList_(spec).map(s => s.toLowerCase());
+  return sampleTypes.some(st => specParts.indexOf(st.toLowerCase()) !== -1) ? "ok" : "mismatch";
+}
+
+function assayAllows_(section, condition, assays) {
+  const sec = String(section || "").trim();
+  const cond = String(condition || "").toLowerCase();
+  const targetedSec = TARGETED_SECTIONS.indexOf(sec) !== -1;
+  const metaSec = METABARCODING_SECTIONS.indexOf(sec) !== -1;
+  const condT = /assay_type\s*=\s*targeted/.test(cond);
+  const condM = /assay_type\s*=\s*metabarcoding/.test(cond);
+  const specific = targetedSec || metaSec || condT || condM;
+  if (!assays.length) return specific ? "blank" : "ok";
+  const hasT = assays.indexOf("targeted") !== -1;
+  const hasM = assays.indexOf("metabarcoding") !== -1;
+  if (hasT && hasM) return "ok";
+  if (hasM && (targetedSec || condT)) return "mismatch";
+  if (hasT && (metaSec || condM)) return "mismatch";
+  return "ok";
+}
+
+function planMissingFields_(spreadsheet) {
+  const sampleTypes = pipeList_(projectTermValue_(spreadsheet, "sample_type"));
+  const assays = pipeList_(projectTermValue_(spreadsheet, "assay_type")).map(s => s.toLowerCase());
+  const toAdd = {};
+  const skipped = { req: [], sampleBlank: [], sampleMismatch: [], assayBlank: [], assayMismatch: [] };
+  const checklist = spreadsheet.getSheetByName("checklist");
+  if (!checklist || checklist.getLastRow() < 2) return { toAdd, skipped };
+  const headers = checklist.getRange(1, 1, 1, checklist.getLastColumn()).getValues()[0].map(v => String(v || "").trim());
+  if (checklistCol_(headers, "term_name") < 0) return { toAdd, skipped };
+  const rows = checklist.getRange(2, 1, checklist.getLastRow() - 1, checklist.getLastColumn()).getValues();
+  const sheetState = [];
+  forEachMetadataSheet_(spreadsheet, sheet => {
+    sheetState.push({
+      sheet: sheet,
+      name: sheet.getName(),
+      terms: sheetTermSet_(sheet),
+      levels: sheetReqLevelSet_(sheet),
+    });
+  });
+  const seen = {};
+  rows.forEach(row => {
+    const term = checklistCell_(row, headers, "term_name");
+    if (!term) return;
+    const dataType = checklistCell_(row, headers, "data_type");
+    const req = checklistCell_(row, headers, "requirement_level_code");
+    const section = checklistCell_(row, headers, "section");
+    const cond = checklistCell_(row, headers, "requirement_level_condition");
+    const spec = checklistCell_(row, headers, "sample_type_specificity");
+    const termType = checklistCell_(row, headers, "term_type");
+    const item = {
+      term: term,
+      req: req,
+      section: section,
+      note: noteFromChecklistRow_(row, headers),
+      isVocab: isChecklistDropdownTerm_(termType),
+      options: splitVocabOptions_(checklistCell_(row, headers, "controlled_vocabulary_options")),
+    };
+    sheetState.forEach(st => {
+      if (!dataTypeMatchesSheet_(dataType, st.name)) return;
+      const key = st.name + "\0" + checklistTermKey_(term);
+      if (seen[key] || st.terms[term] || st.terms[checklistTermKey_(term)]) return;
+      seen[key] = true;
+      if (!st.levels[req]) {
+        skipped.req.push(st.name + ": " + term);
+        return;
+      }
+      const sampleOk = sampleTypeAllows_(spec, sampleTypes);
+      if (sampleOk === "blank") {
+        skipped.sampleBlank.push(st.name + ": " + term);
+        return;
+      }
+      if (sampleOk === "mismatch") {
+        skipped.sampleMismatch.push(st.name + ": " + term);
+        return;
+      }
+      const assayOk = assayAllows_(section, cond, assays);
+      if (assayOk === "blank") {
+        skipped.assayBlank.push(st.name + ": " + term);
+        return;
+      }
+      if (assayOk === "mismatch") {
+        skipped.assayMismatch.push(st.name + ": " + term);
+        return;
+      }
+      if (!toAdd[st.name]) toAdd[st.name] = { sheet: st.sheet, items: [] };
+      toAdd[st.name].items.push(item);
+    });
+  });
+  return { toAdd, skipped };
+}
+
+function countToAdd_(plan) {
+  return Object.keys(plan.toAdd).reduce((n, k) => n + plan.toAdd[k].items.length, 0);
+}
+
+function formatAppendPreview_(plan) {
+  const lines = [
+    "These missing fields will be appended as NEW empty columns/rows at the end. Existing cells are not changed.",
+    "",
+  ];
+  Object.keys(plan.toAdd).forEach(name => {
+    const terms = plan.toAdd[name].items.map(i => i.term);
+    lines.push(name + " (" + terms.length + "): " + terms.join(", "));
+  });
+  lines.push("", "Continue?");
+  return lines.join("\n");
+}
+
+function clearNewRange_(range) {
+  range.clearContent();
+  range.clearNote();
+  range.clearDataValidations();
+  range.setBackground(null);
+}
+
+function appendWideFields_(sheet, items) {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) throw new Error("empty sheet");
+  sheet.insertColumnsAfter(lastCol, items.length);
+  const startCol = lastCol + 1;
+  clearNewRange_(sheet.getRange(1, startCol, sheet.getMaxRows(), items.length));
+  items.forEach((item, i) => {
+    const col = startCol + i;
+    const reqCell = sheet.getRange(1, col);
+    reqCell.setValue(item.req);
+    if (REQ_COLORS[item.req]) reqCell.setBackground(REQ_COLORS[item.req]);
+    sheet.getRange(2, col).setValue(item.section);
+    const header = sheet.getRange(3, col);
+    header.setValue(item.term);
+    if (item.note) header.setNote(item.note);
+    const endRow = wideDropdownEndRow_(sheet);
+    applyDropdownOrClear_(sheet.getRange(4, col, Math.max(1, endRow - 3), 1), item);
+  });
+}
+
+function appendLongFormFields_(sheet, items) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) throw new Error("empty sheet");
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(v => String(v || "").trim());
+  let termCol = headers.indexOf("term_name") + 1;
+  if (termCol < 1) termCol = findCellByValue(sheet, "term_name")?.col || 0;
+  if (termCol < 1) throw new Error("no term_name column");
+  const reqCol = headers.indexOf("requirement_level_code") + 1;
+  const secCol = headers.indexOf("section") + 1;
+  const valueStart = longFormValueStartCol_(headers, termCol);
+  sheet.insertRowsAfter(lastRow, items.length);
+  clearNewRange_(sheet.getRange(lastRow + 1, 1, items.length, sheet.getMaxColumns()));
+  items.forEach((item, i) => {
+    const row = lastRow + 1 + i;
+    const termCell = sheet.getRange(row, termCol);
+    termCell.setValue(item.term);
+    if (item.note) termCell.setNote(item.note);
+    if (reqCol) {
+      const reqCell = sheet.getRange(row, reqCol);
+      reqCell.setValue(item.req);
+      if (REQ_COLORS[item.req]) reqCell.setBackground(REQ_COLORS[item.req]);
+    }
+    if (secCol) sheet.getRange(row, secCol).setValue(item.section);
+    if (valueStart <= lastCol) {
+      applyDropdownOrClear_(sheet.getRange(row, valueStart, 1, lastCol - valueStart + 1), item);
+    }
+  });
+}
+
+function appendMissingFields_(plan) {
+  const appended = [];
+  const errors = [];
+  Object.keys(plan.toAdd).forEach(name => {
+    const group = plan.toAdd[name];
+    if (!group.items.length) return;
+    try {
+      if (isWideMetadataSheetLayout_(group.sheet)) appendWideFields_(group.sheet, group.items);
+      else appendLongFormFields_(group.sheet, group.items);
+      appended.push('"' + name + '": appended ' + group.items.length + " field(s): " + group.items.map(i => i.term).join(", "));
+    } catch (e) {
+      errors.push('"' + name + '": ' + e.message);
+    }
+  });
+  const lines = appended.length ? appended.slice() : ["Appended 0 fields."];
+  const sk = plan.skipped;
+  if (sk.req.length) lines.push("Skipped (requirement level not on this sheet): " + sk.req.join(", "));
+  if (sk.sampleBlank.length) lines.push("Skipped (project sample_type is blank; would have added): " + sk.sampleBlank.join(", "));
+  if (sk.sampleMismatch.length) lines.push("Skipped (sample_type_specificity does not match project sample_type): " + sk.sampleMismatch.join(", "));
+  if (sk.assayBlank.length) lines.push("Skipped (project assay_type is blank; would have added): " + sk.assayBlank.join(", "));
+  if (sk.assayMismatch.length) lines.push("Skipped (field is not for this assay_type): " + sk.assayMismatch.join(", "));
+  if (errors.length) lines.push("Errors: " + errors.join(" | "));
+  return lines.join("\n");
+}
+
+function confirmAndAppendMissing_(spreadsheet) {
+  const plan = planMissingFields_(spreadsheet);
+  if (!countToAdd_(plan)) return appendMissingFields_(plan);
+  const ui = SpreadsheetApp.getUi();
+  if (ui.alert("Append missing fields", formatAppendPreview_(plan), ui.ButtonSet.YES_NO) !== ui.Button.YES) {
+    return "Append: cancelled. No columns/rows were added.";
+  }
+  return appendMissingFields_(plan);
+}
+
+function appendMissingFieldsFromChecklist() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss.getSheetByName("checklist")) {
+    ui.alert("No checklist sheet found. Import a checklist CSV onto a tab named checklist first.");
+    return;
+  }
+  const plan = planMissingFields_(ss);
+  if (!countToAdd_(plan)) {
+    ui.alert(appendMissingFields_(plan));
+    return;
+  }
+  if (ui.alert("Append missing fields", formatAppendPreview_(plan), ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  ui.alert(appendMissingFields_(plan));
 }
 
 function isWideMetadataSheetLayout_(sheet) {
