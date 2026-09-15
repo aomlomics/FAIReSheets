@@ -123,7 +123,7 @@ When you run FAIReSheets for the first time, the following will happen:
   <img src="src/helpers/google_apps_script_logo.png" alt="Google Apps Script" width="96">
 </div>
 
-Follow the instructions below to add a **FAIReSheets Tools** menu to your Google Sheets page. It covers TSV download (needed for [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and [edna2obis](https://github.com/aomlomics/edna2obis)), duplicate checks, and checklist updates (notes, dropdowns, colors, and new fields).
+Follow the instructions below to add a **FAIReSheets Tools** menu to your Google Sheets page. It covers TSV download (needed for [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and [edna2obis](https://github.com/aomlomics/edna2obis)), reordering columns or fields, duplicate checks, and checklist updates (notes, dropdowns, colors, and new fields).
 
 ### Updating the `checklist` tab on an existing Google Sheet
 
@@ -167,19 +167,31 @@ The Apps Script reads this tab for checklist updates (notes, dropdowns, colors, 
 
 Google may ask you to authorize the script the first time you run a tool.
 
-**FAIReSheets Tools**
+### FAIReSheets Tools menu
 
-- Download sheets as TSVs (for Ocean DNA Explorer / edna2obis)
-- Standardize font across sheets
-- Reorder terms based on Apps Script lists
-- Check / Recheck for duplicate samp_names and lib_ids
-- Update term_name descriptions from the `checklist` tab
-- Update dropdown values from the `checklist` tab
-- Update requirement and section colors from the `checklist` tab
-- Update sheets with new fields from checklist (append at the end only)
-- Apply all checklist updates (notes, dropdowns, colors/sections, then append)
+<div align="left">
+  <img src="src/helpers/fairesheets_tools_options_screenshot.png" alt="FAIReSheets Tools menu options" width="480">
+</div>
 
-Reorder moves existing rows/columns in place, before or after you fill in data. Edit the lists in the script if you want. Missing terms are skipped.
+#### Change column or field order
+
+**Reorder terms based on Apps Script lists** moves existing columns or rows **in place**. It does not add or delete fields, and it does not change cell values. Dropdowns, notes, and colors stay with the field. You can run it on a blank template or after you have filled in data.
+
+The order comes from `COLUMN_OR_FIELD_ORDER` in the Apps Script (search for that name). There are four lists:
+
+- **sampleMetadata** and **experimentRunMetadata:** these are **column** headers. Listed fields move to the **left**, in the order you write them.
+- **projectMetadata** and **analysisMetadata:** these are **term_name** values (**rows**). Listed fields move to the **top**, in the order you write them. Every sheet whose name starts with `analysisMetadata` uses the analysis list.
+
+Anything you do **not** list stays where it is, after the listed fields. A name that is not on the sheet is skipped (no error). Keep the lists short if you only want to pin a few fields first, or list every term if you want a full order.
+
+**To use it:**
+
+1. **Extensions → Apps Script.**
+2. Find `const COLUMN_OR_FIELD_ORDER`.
+3. Edit the quoted names. Keep the commas and quotes. Save (**File → Save**, or the disk icon).
+4. In the Google Sheet, **FAIReSheets Tools → Reorder terms based on Apps Script lists**. Click **Continue**.
+
+If the sheet has merged cells, reorder is skipped for that sheet and the merged ranges are highlighted yellow. Unmerge them and run the menu item again.
 
 ```javascript
 const REFERENCE_SHEETS = ["README", "Drop-down values", "checklist"];
