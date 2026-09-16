@@ -109,15 +109,25 @@ When you run FAIReSheets for the first time, the following will happen:
 3. Once you grant permission, a `token.json` file will be created in the project directory. This file stores your authentication token, so you won't have to log in every time you run the tool. Do not share or commit this file.
 
 ### Troubleshooting
-- **Problem**: Older instructions say to request access or configure `GIST_URL` by emailing bayden.willms@noaa.gov. Do I still need to do that?
-  - **Solution**: These authentication steps are deprecated. Please 'git pull' the latest version of FAIReSheets, remove `GIST_URL` from your local `.env`, and run the application to use the new verified browser authentication flow.
-- **Problem**: Authentication errors (e.g., "invalid_grant")
-  - **Solution**: Delete the `token.json` file and run the tool again. This will re-trigger the authentication process.
+- **Problem**: Older instructions said to request access or configure `GIST_URL` by emailing bayden.willms@noaa.gov. Do I still need to do that?
+  - **Solution**: These authentication steps are deprecated. Please 'git pull' the latest version of FAIReSheets, remove `GIST_URL` from your local `.env`. Manual authentication isn't necessary anymore because the app has been verified by Google.
+- **Problem**: Authentication errors
+  - **Solution**: Delete the local `token.json` file in the root directory of your project and run the tool again. This will re-trigger the authentication process.
   - **Solution**: Make sure you granted FAIReSheets permission to edit Google Sheets.
 - **Problem**: Errors when running FAIReSheets
-  - **Solution**: Make sure the Google Sheet that FAIReSheets is editing is **EMPTY**. You can use Google Drive's built in Restore History button before running FAIReSheets again, or, make a new Google Sheet and replace the Spreadsheet ID in the `.env` file. 
+  - **Solution**: Make sure the Google Sheet that FAIReSheets is editing is **EMPTY**. You can use Google Drive's built in Restore History button before running FAIReSheets again, or, make a new Google Sheet and replace the Spreadsheet ID in the `.env` file.
+- **Problem**: How do I create Ocean DNA Explorer and edna2obis compatible templates, ready for submission once filled?
+  - **Solution**: Run FAIReSheets using the FAIRe-NOAA format.
+- **Problem**: I don't see the **FAIReSheets Tools** menu on Google Sheets after saving the Google Apps Script.
+  - **Solution**: Make sure you close and reopen the Google Sheet and the menu tab will appear
+- **Problem**: Will the Apps Script functions that edit the templates delete data if the sheet is filled in?
+  - **Solution**: No, they are designed to restructure your templates WITH or WITHOUT data. 
+- **Problem**: Will the Apps Script functions only execute after a confirmation?
+  - **Solution**: Yes. And also, you can always Restore History via Google Sheets. 
+- **Problem**: 
+  - **Solution**: 
 
-## Optional (recommended): Google Apps Script
+## Optional: Google Apps Script
 
 <div align="left">
   <img src="src/helpers/google_apps_script_logo.png" alt="Google Apps Script" width="96">
@@ -247,30 +257,35 @@ function popupShell_(bodyHtml, toolId) {
   return `<!DOCTYPE html>
 <html><head><base target="_top">
 <style>
-body{margin:0;font-family:Arial,sans-serif;font-size:15px;line-height:1.45;color:#222;}
-.wrap{padding:20px 22px 18px;}
-.head{margin:0 0 16px;}
-.head img{width:96px;height:96px;}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#202124;background:#fff;}
+.wrap{padding:18px 20px 16px;}
+.head{margin:0 0 14px;}
+.head img{width:96px;height:96px;display:block;}
 .scroll{max-height:300px;overflow:auto;}
-.scroll ul{margin:6px 0 12px 20px;padding:0;}
-.scroll li{margin:0 0 6px;}
-.scroll p{margin:0 0 10px;}
-.btns{margin-top:16px;}
-button{font-family:Arial,sans-serif;font-size:14px;padding:8px 16px;margin-right:8px;}
-#status{margin-top:10px;}
-.working{display:flex;align-items:center;gap:10px;color:#174ea6;font-size:14px;}
-.spinner{width:22px;height:22px;border:3px solid #c5d5f0;border-top-color:#174ea6;border-radius:50%;animation:faire-spin .75s linear infinite;flex-shrink:0;}
+.scroll ul{margin:4px 0 10px 18px;padding:0;}
+.scroll li{margin:0 0 4px;}
+.scroll p{margin:0 0 8px;color:#3c4043;}
+.scroll p:last-child{margin-bottom:0;}
+#status{margin-top:8px;}
+.working{display:flex;align-items:center;gap:10px;color:#174ea6;font-size:13px;}
+.spinner{width:18px;height:18px;border:3px solid #c5d5f0;border-top-color:#174ea6;border-radius:50%;animation:faire-spin .75s linear infinite;flex-shrink:0;}
 @keyframes faire-spin{to{transform:rotate(360deg);}}
+.btns{margin-top:14px;display:flex;gap:8px;}
+button{font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:600;padding:8px 18px;border-radius:4px;cursor:pointer;}
+button.primary{background:#174ea6;border:1px solid #174ea6;color:#fff;}
+button.primary:hover{background:#123b80;border-color:#123b80;}
+button.secondary{background:#fff;border:1px solid #dadce0;color:#174ea6;}
+button.secondary:hover{background:#f6f9fe;border-color:#174ea6;}
 </style></head><body>
 <div class="wrap">
   <div class="head"><img src="${FAIRE_ICON_URL}" alt="FAIReSheets"></div>
   <div id="main" class="scroll">${bodyHtml}</div>
+  <div id="status"></div>
   <div class="btns" id="btns">
     ${hasRun
-      ? '<button type="button" onclick="go()">Continue</button><button type="button" onclick="google.script.host.close()">Cancel</button>'
-      : '<button type="button" onclick="google.script.host.close()">Close</button>'}
+      ? '<button type="button" class="primary" onclick="go()">Continue</button><button type="button" class="secondary" onclick="google.script.host.close()">Cancel</button>'
+      : '<button type="button" class="secondary" onclick="google.script.host.close()">Close</button>'}
   </div>
-  <div id="status"></div>
 </div>
 <script>
 var toolId = ${JSON.stringify(toolId || "")};
@@ -290,11 +305,11 @@ function done(res) {
   if (typeof res === "string") res = { html: res };
   document.getElementById("main").innerHTML = (res.html || "") + (res.previewHtml || "");
   var btns = document.getElementById("btns");
-  btns.style.display = "block";
+  btns.style.display = "flex";
   if (res.append) {
-    btns.innerHTML = '<button type="button" onclick="doAppend()">Append fields</button><button type="button" onclick="google.script.host.close()">Skip</button>';
+    btns.innerHTML = '<button type="button" class="primary" onclick="doAppend()">Append fields</button><button type="button" class="secondary" onclick="google.script.host.close()">Skip</button>';
   } else {
-    btns.innerHTML = '<button type="button" onclick="google.script.host.close()">Close</button>';
+    btns.innerHTML = '<button type="button" class="secondary" onclick="google.script.host.close()">Close</button>';
   }
 }
 function doAppend() {
@@ -304,16 +319,16 @@ function doAppend() {
     clearWorking();
     document.getElementById("main").innerHTML = html;
     var btns = document.getElementById("btns");
-    btns.style.display = "block";
-    btns.innerHTML = '<button type="button" onclick="google.script.host.close()">Close</button>';
+    btns.style.display = "flex";
+    btns.innerHTML = '<button type="button" class="secondary" onclick="google.script.host.close()">Close</button>';
   }).withFailureHandler(fail).appendMissingFieldsNow();
 }
 function fail(err) {
   clearWorking();
   document.getElementById("main").innerHTML = "<p>" + escapeHtml_(err && err.message ? err.message : String(err)) + "</p>";
   var btns = document.getElementById("btns");
-  btns.style.display = "block";
-  btns.innerHTML = '<button type="button" onclick="google.script.host.close()">Close</button>';
+  btns.style.display = "flex";
+  btns.innerHTML = '<button type="button" class="secondary" onclick="google.script.host.close()">Close</button>';
 }
 function escapeHtml_(s) {
   return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -1770,7 +1785,7 @@ function highlightDuplicates() {
 For submission to the [Ocean DNA Explorer](https://www.oceandnaexplorer.org/) and to [edna2obis](https://github.com/aomlomics/edna2obis), you will need to download your data sheets (once you have filled them with data) as TSV files. The Google Apps Script you'll add to your sheet includes a tool to make this easy:
 
 **Steps to Download Your Data:**
-1.  After adding the Apps Script (see instructions below), a new menu will appear in your Google Sheet called **FAIReSheets Tools**.
+1.  After adding the Apps Script (see instructions above), a new menu will appear in your Google Sheet called **FAIReSheets Tools**.
 2.  Click **FAIReSheets Tools > Download sheets as TSVs**.
 3.  A dialog will ask you to continue. README, Drop-down values, and checklist are skipped.
 4.  Click Continue. The script creates a timestamped folder in My Drive (e.g., `FAIRe_NOAA_YourProject_20241112_TSVs_20241112_1430`) and saves the data sheets as TSV files there.
